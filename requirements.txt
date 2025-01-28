@@ -1,0 +1,13 @@
+# 核心依赖
+scrapy>=2.11.0  # 爬虫框架
+beautifulsoup4>=4.12.3  # HTML解析
+pydantic>=2.7.0  # 数据验证
+playwright>=1.41.2  # 浏览器自动化
+python-dotenv>=1.0.0  # 环境变量管理
+requests>=2.31.0  # HTTP请求
+Pillow>=10.2.0  # 图片处理
+python-magic>=0.4.27  # 文件类型检测
+pytesseract>=0.3.10  # OCR文字识别
+pdf2image>=1.17.0  # PDF转图片
+python-docx>=1.1.0  # Word文档处理
+python-pptx>=0.6.23  # PPT文档处理

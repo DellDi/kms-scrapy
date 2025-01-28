@@ -1,0 +1,35 @@
+# 爬虫项目专属规则 (Code Mode)
+项目初始化规范:使用uv作为安装工具
+1. 强制创建基础架构：
+   - 自动生成 `requirements.txt` 并添加：
+     ```python
+     # 核心依赖
+     beautifulsoup4>=4.12.3  # HTML解析
+     pydantic>=2.7.0  # 数据验证
+     ...
+     ```
+2. 目录结构约束：
+   ```python
+   # 必须包含的目录结构
+   ├── crawler/
+   │   ├── core/         # 爬虫核心逻辑
+   │   ├── storage/      # 数据存储模块
+   │   ├── utils/        # 爬虫专用工具
+   │   └── __init__.py   # 显式暴露接口
+   ├── config/
+   │   └── settings.py   # 配置中心（禁止硬编码）
+   └── tests/            # 测试用例
+       └── conftest.py   # 爬虫测试夹具
+3. ▌变更日志管理
+  1. 每次功能变更时自动生成：
+    - 识别代码变更中的核心功能点
+    - 按语义化版本规范归类变更类型(feat/fix/chore)
+    - 用 Markdown 格式追加到 CHANGELOG.md 的 Unreleased 章节
+    - 示例格式：
+      ```markdown
+      - 新增用户身份验证端点 @{iso8601-date}
+      ```
+
+  2. 提交时触发校验：
+    - 检查是否包含有效的 changelog 更新
+    - 未更新时生成警告并提供自动补全建议
