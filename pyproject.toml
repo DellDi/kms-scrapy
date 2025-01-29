@@ -1,0 +1,52 @@
+[project]
+name = "kms"
+version = "0.1.0"
+description = "A web crawler for Confluence KMS system with document processing capabilities"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [
+    {name = "zengdi", email = ""}
+]
+dependencies = [
+    "scrapy>=2.11.0",
+    "beautifulsoup4>=4.12.3",
+    "pydantic>=2.7.0",
+    "playwright>=1.41.2",
+    "python-dotenv>=1.0.0",
+    "requests>=2.31.0",
+    "Pillow>=10.2.0",
+    "python-magic>=0.4.27",
+    "pytesseract>=0.3.10",
+    "pdf2image>=1.17.0",
+    "python-docx>=1.1.0",
+    "python-pptx>=0.6.23",
+    "pylibmagic>=0.5.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "black>=23.0.0",
+    "isort>=5.0.0",
+    "flake8>=6.0.0"
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.hatch.build.targets.wheel]
+packages = ["crawler"]

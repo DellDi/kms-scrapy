@@ -8,6 +8,7 @@ import pytesseract
 from pdf2image import convert_from_path
 from docx import Document
 from pptx import Presentation
+import pylibmagic
 import magic
 import requests
 from pydantic import BaseModel, Field
@@ -31,12 +32,14 @@ class ConfluenceSpider(scrapy.Spider):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.start_urls = [kwargs.get('start_url', 'http://kms.new-see.com:8090')]
+        self.basic_auth = ('newsee', 'newsee')
         self.auth = {
-            'username': 'zengdi',
-            'password': '808611'
+            'os_username': 'zengdi',
+            'os_password': '808611'
         }
+
         self.baichuan_config = {
-            'api_key': 'sk-47052acfc9f042318fe63d0c59914df3',
+            'api_key': os.getenv('BAI_CH_API_KEK'),
             'api_url': 'https://api.baichuan-ai.com/v1/chat/completions'
         }
 
@@ -45,13 +48,16 @@ class ConfluenceSpider(scrapy.Spider):
             yield Request(
                 url,
                 callback=self.parse,
-                meta={'cookiejar': 1},
+                meta={
+                    'cookiejar': 1,
+                    'dont_redirect': False
+                },
                 dont_filter=True
             )
 
     def parse(self, response):
         # 处理登录
-        if 'login' in response.url:
+        if response.css('#loginform'):
             return self.login(response)
 
         # 解析导航树
@@ -61,11 +67,26 @@ class ConfluenceSpider(scrapy.Spider):
                 yield response.follow(link, callback=self.parse_content)
 
     def login(self, response):
-        return FormRequest.from_response(
+        print("🚀 ~ self, response:", self, response)
+
+        res = FormRequest.from_response(
             response,
-            formdata=self.auth,
-            callback=self.after_login
+            formcss='#loginform',
+            formdata={'os_username': self.auth['os_username'], 'os_password': self.auth['os_password']},
+            clickdata={'css': '#loginButton'},
+            callback=self.after_login,
+            dont_filter=True,
+            meta={'cookies': response.meta.get('cookies')}
         )
+        print("🚀 ~ self, response:", self, res)
+        return res
+
+    def after_login(self, response):
+        if 'login' not in response.url:
+            return self.parse(response)
+        else:
+            self.logger.error('登录失败')
+            return None
 
     def optimize_content(self, content: str) -> str:
         headers = {
