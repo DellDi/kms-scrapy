@@ -1,91 +1,255 @@
-import os
-from typing import List, Dict, Any
 import scrapy
 from scrapy.http import Request, FormRequest
 from bs4 import BeautifulSoup
-from PIL import Image
-import pytesseract
-from pdf2image import convert_from_path
-from docx import Document
-from pptx import Presentation
-import pylibmagic
-import magic
 import requests
-from pydantic import BaseModel, Field
-from dotenv import load_dotenv
-
-load_dotenv()
-
-class KMSItem(BaseModel):
-    title: str = Field(description="文档标题")
-    content: str = Field(description="文档内容")
-    attachments: List[Dict[str, Any]] = Field(default_factory=list, description="附件信息")
+import base64
+from .auth import AuthManager
+from .content import ContentParser, KMSItem
+from .config import config
 
 class ConfluenceSpider(scrapy.Spider):
     name = 'confluence'
     custom_settings = {
-        'DOWNLOAD_DELAY': 1,
+        'DOWNLOAD_DELAY': 2,
         'COOKIES_ENABLED': True,
-        'CONCURRENT_REQUESTS': 1
+        'CONCURRENT_REQUESTS': 1,
+        'RETRY_TIMES': 5,
+        'RETRY_HTTP_CODES': [500, 502, 503, 504, 408, 429],
+        'DEFAULT_REQUEST_HEADERS': {
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36'
+        },
+        'Cookie': ''
     }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.start_urls = [kwargs.get('start_url', 'http://kms.new-see.com:8090')]
-        self.basic_auth = ('newsee', 'newsee')
+        self.auth_manager = AuthManager()
+        self.content_parser = ContentParser()
+        self.basic_auth = (config.auth.basic_auth_user, config.auth.basic_auth_pass)
         self.auth = {
-            'os_username': 'zengdi',
-            'os_password': '808611'
+            'os_username': config.auth.username,
+            'os_password': config.auth.password
         }
-
+        self.default_cookies = config.spider.default_cookies
         self.baichuan_config = {
-            'api_key': os.getenv('BAI_CH_API_KEK'),
-            'api_url': 'https://api.baichuan-ai.com/v1/chat/completions'
+            'api_key': config.baichuan.api_key,
+            'api_url': config.baichuan.api_url
         }
 
     def start_requests(self):
         for url in self.start_urls:
-            yield Request(
+            yield self.auth_manager.create_authenticated_request(
                 url,
                 callback=self.parse,
                 meta={
-                    'cookiejar': 1,
-                    'dont_redirect': False
-                },
-                dont_filter=True
+                    'dont_merge_cookies': True,
+                    'handle_httpstatus_list': [302]
+                }
             )
 
     def parse(self, response):
-        # 处理登录
-        if response.css('#loginform'):
-            return self.login(response)
+        # 如果是重定向到登录页面
+        if response.status == 302 or '/login.action' in response.url:
+            # 如果是302重定向，获取重定向URL
+            if response.status == 302:
+                login_url = response.urljoin(response.headers.get('Location', b'').decode())
+            else:
+                login_url = response.url
 
-        # 解析导航树
-        tree_links = response.css('.plugin-tabmeta-details a::attr(href)').getall()
-        for link in tree_links:
-            if 'pageId' in link:
-                yield response.follow(link, callback=self.parse_content)
+            # 处理登录页面
+            if '/login.action' in login_url:
+                # 获取原始URL，如果meta中没有，则使用当前URL
+                original_url = response.meta.get('original_url', response.url)
+                # 获取登录页面内容
+                # auth_str = f'Basic {base64.b64encode(f"{self.basic_auth[0]}:{self.basic_auth[1]}".encode()).decode()}'
+                auth_str = 'Basic bmV3c2VlOm5ld3NlZQ=='
+                headers = {
+                    'Authorization': auth_str,
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+                    'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6',
+                    'Connection': 'keep-alive',
+                    'Upgrade-Insecure-Requests': '1',
+                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36 Edg/132.0.0.0'
+                }
+                yield Request(
+                    login_url,
+                    callback=self.login,
+                    headers=headers,
+                    dont_filter=True,
+                    meta={
+                        'dont_merge_cookies': True,
+                        'handle_httpstatus_list': [302],
+                        'original_url': original_url  # 保存原始URL
+                    }
+                )
+            else:
+                yield Request(
+                    login_url,
+                    callback=self.parse,
+                    dont_filter=True,
+                    meta={
+                        'dont_merge_cookies': True,
+                        'handle_httpstatus_list': [302]
+                    }
+                )
+        # 处理内容页面
+        else:
+            # 解析导航树
+            tree_links = response.css('.plugin-tabmeta-details a::attr(href)').getall()
+            for link in tree_links:
+                if 'pageId' in link:
+                    # 添加认证和cookie信息
+                    auth_str ='Basic bmV3c2VlOm5ld3NlZQ=='
+                    headers = {
+                        'Authorization': auth_str,
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+                        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6',
+                        'Connection': 'keep-alive',
+                        'Upgrade-Insecure-Requests': '1',
+                        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36 Edg/132.0.0.0'
+                    }
+                    # 获取当前的cookie
+                    cookies = self.default_cookies.copy()
+                    if 'cookies' in response.meta:
+                        cookies.update(response.meta['cookies'])
+                    headers['Cookie'] = '; '.join(f'{k}={v}' for k, v in cookies.items())
+
+                    yield response.follow(
+                        link,
+                        callback=self.parse_content,
+                        headers=headers,
+                        meta={
+                            'dont_merge_cookies': False,
+                            'handle_httpstatus_list': [302],
+                            'cookies': cookies
+                        }
+                    )
 
     def login(self, response):
-        print("🚀 ~ self, response:", self, response)
+        # 检查是否是登录页面
+        if '/login.action' in response.url:
+            # 构建登录表单数据
+            # 获取原始目标URL，如果没有则使用起始URL
+            target_url = response.meta.get('original_url', self.start_urls[0])
+            formdata = {
+                'os_username': self.auth['os_username'],
+                'os_password': self.auth['os_password'],
+                'os_cookie': 'true',
+                'os_destination': target_url,  # 使用实际的目标URL
+                'login': '登录'
+            }
 
-        res = FormRequest.from_response(
-            response,
-            formcss='#loginform',
-            formdata={'os_username': self.auth['os_username'], 'os_password': self.auth['os_password']},
-            clickdata={'css': '#loginButton'},
-            callback=self.after_login,
-            dont_filter=True,
-            meta={'cookies': response.meta.get('cookies')}
-        )
-        print("🚀 ~ self, response:", self, res)
-        return res
+            # 使用正确的选择器和登录按钮
+            auth_str ='Basic bmV3c2VlOm5ld3NlZQ=='
+            headers = {
+                'Authorization': auth_str,
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+                'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6',
+                'Cache-Control': 'max-age=0',
+                'Proxy-Connection': 'keep-alive',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1',
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36 Edg/132.0.0.0'
+            }
+            yield FormRequest.from_response(
+                response,
+                formdata=formdata,
+                formid='loginform',  # 指定登录表单的ID
+                clickdata={'name': 'login'},  # 指定登录按钮
+                headers=headers,
+                callback=self.after_login,
+                dont_filter=True,
+                meta={
+                    'dont_merge_cookies': True,  # 使用新的cookie
+                    'handle_httpstatus_list': [302],  # 处理302重定向
+                    'original_url': formdata['os_destination']  # 保存原始目标URL
+                }
+            )
 
     def after_login(self, response):
-        if 'login' not in response.url:
-            return self.parse(response)
+        # 记录响应状态码和响应头信息
+        self.logger.info(f'登录响应状态码: {response.status}')
+        self.logger.info(f'响应头信息: {dict(response.headers)}')
+
+        # 检查登录是否成功 - 需要同时满足以下条件：
+        # 1. 302状态码
+        # 2. 存在JSESSIONID和seraph.confluence两个cookie
+        if response.status == 302:
+            cookies = self.default_cookies.copy()  # 使用默认cookie作为基础
+            jsessionid_found = False
+            seraph_found = False
+
+            # 记录Set-Cookie头信息并解析
+            self.logger.info('开始处理cookie信息')
+            for cookie in response.headers.getlist('Set-Cookie'):
+                cookie_str = cookie.decode()
+                self.logger.info(f'处理cookie: {cookie_str}')
+
+                if '=' in cookie_str:
+                    name, value = cookie_str.split('=', 1)
+                    value = value.split(';')[0]
+                    name = name.strip()
+                    value = value.strip()
+                    cookies[name] = value
+
+                    if name == 'JSESSIONID':
+                        jsessionid_found = True
+                    elif name == 'seraph.confluence':
+                        seraph_found = True
+
+            # 检查是否获取到所需的cookie
+            if jsessionid_found and seraph_found:
+                self.logger.info('成功获取所需的cookie')
+                # 直接使用保存的原始目标URL
+                target_url = response.meta.get('original_url', self.start_urls[0])
+                self.logger.info(f'使用原始目标URL: {target_url}')
+
+                # 更新默认cookie
+                self.default_cookies.update(cookies)
+                self.logger.info(f'更新默认cookie: {self.default_cookies}')
+
+                # 构建认证头
+                auth_str = 'Basic bmV3c2VlOm5ld3NlZQ=='
+                headers = {
+                    'Authorization': auth_str,
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+                    'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6',
+                    'Cache-Control': 'max-age=0',
+                    'Proxy-Connection': 'keep-alive',
+                    'Connection': 'keep-alive',
+                    'Upgrade-Insecure-Requests': '1',
+                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36 Edg/132.0.0.0',
+                    'Host': 'kms.new-see.com:8090',
+                    'Cookie': '; '.join(f'{k}={v}' for k, v in cookies.items())
+                }
+
+                self.logger.info(f'构建的请求头: {headers}')
+
+                # 登录成功后直接访问目标URL
+                return Request(
+                    target_url,
+                    callback=self.parse_content,  # 直接使用parse_content方法处理页面内容
+                    headers=headers,
+                    dont_filter=True,
+                    meta={
+                        'dont_merge_cookies': False,  # 登录成功后允许合并cookie
+                        'handle_httpstatus_list': [302],  # 继续处理可能的重定向
+                        'cookies': cookies  # 保存cookie信息供后续使用
+                    }
+                )
+            else:
+                missing_cookies = []
+                if not jsessionid_found:
+                    missing_cookies.append('JSESSIONID')
+                if not seraph_found:
+                    missing_cookies.append('seraph.confluence')
+                self.logger.error(f'登录失败：缺少必要的cookie: {", ".join(missing_cookies)}')
+                return None
         else:
-            self.logger.error('登录失败')
+            self.logger.error(f'登录失败：响应状态码不正确 {response.status}')
             return None
 
     def optimize_content(self, content: str) -> str:
@@ -120,33 +284,89 @@ class ConfluenceSpider(scrapy.Spider):
             return content
 
     def parse_content(self, response):
+        # 检查是否是重定向
+        if response.status == 302:
+            redirect_url = response.headers.get(b'Location', b'').decode()
+            if redirect_url:
+                redirect_url = response.urljoin(redirect_url)
+                # 如果是权限验证失败或需要重新登录
+                if 'permissionViolation=true' in redirect_url or '/login.action' in redirect_url:
+                    original_url = response.meta.get('original_url', response.url)
+                    yield self.auth_manager.create_authenticated_request(
+                        redirect_url,
+                        callback=self.login,
+                        meta={
+                            'dont_merge_cookies': True,
+                            'handle_httpstatus_list': [302],
+                            'original_url': original_url
+                        }
+                    )
+                    return
+                else:
+                    cookies = config.spider.default_cookies.copy()
+                    if 'cookies' in response.meta:
+                        cookies.update(response.meta['cookies'])
+                    target_url = response.meta.get('original_url', response.url)
+                    yield self.auth_manager.create_authenticated_request(
+                        target_url,
+                        callback=self.parse_content,
+                        meta={
+                            'dont_merge_cookies': False,
+                            'handle_httpstatus_list': [302],
+                            'cookies': cookies,
+                            'original_url': target_url
+                        },
+                        cookies=cookies
+                    )
+                    return
+
+        # 检查是否是登录页面
+        if '/login.action' in response.url:
+            yield self.auth_manager.create_authenticated_request(
+                response.url,
+                callback=self.login,
+                meta={
+                    'dont_merge_cookies': True,
+                    'handle_httpstatus_list': [302],
+                    'original_url': response.meta.get('original_url')
+                }
+            )
+            return
+
+        # 获取当前的cookie
+        cookies = config.spider.default_cookies.copy()
+        if 'cookies' in response.meta:
+            cookies.update(response.meta['cookies'])
+
+        # 解析页面内容
         soup = BeautifulSoup(response.text, 'html.parser')
-        title = soup.select_one('#title-text').get_text(strip=True)
+        title_element = soup.select_one('#title-text')
+
+        # 检查页面是否已完全加载
+        if not title_element:
+            self.logger.info('页面未完全加载，重新请求')
+            yield self.auth_manager.create_authenticated_request(
+                response.url,
+                callback=self.parse_content,
+                meta=response.meta,
+                cookies=cookies
+            )
+            return
+
+        # 处理页面内容
+        title = title_element.get_text(strip=True)
         content = soup.select_one('#main-content')
 
         # 处理附件
         attachments = []
         for attachment in soup.select('.attachment-content'):
-            file_url = attachment.select_one('a::attr(href)').get()
-            file_type = magic.from_file(file_url, mime=True)
-
-            if 'image' in file_type:
-                text = self.process_image(file_url)
-            elif 'pdf' in file_type:
-                text = self.process_pdf(file_url)
-            elif 'word' in file_type:
-                text = self.process_word(file_url)
-            elif 'powerpoint' in file_type:
-                text = self.process_ppt(file_url)
-            else:
-                text = None
-
-            if text:
-                attachments.append({
-                    'url': file_url,
-                    'type': file_type,
-                    'content': text
-                })
+            file_url = response.urljoin(attachment.select_one('a')['href'])
+            attachment_info = self.content_parser.process_attachment(
+                file_url,
+                self.auth_manager.get_auth_headers()
+            )
+            if attachment_info:
+                attachments.append(attachment_info)
 
         # 使用百川API优化内容
         optimized_content = self.optimize_content(content.get_text())
@@ -156,31 +376,3 @@ class ConfluenceSpider(scrapy.Spider):
             content=optimized_content,
             attachments=attachments
         )
-
-    @staticmethod
-    def process_image(image_path):
-        image = Image.open(image_path)
-        return pytesseract.image_to_string(image, lang='chi_sim')
-
-    @staticmethod
-    def process_pdf(pdf_path):
-        pages = convert_from_path(pdf_path)
-        text = ''
-        for page in pages:
-            text += pytesseract.image_to_string(page, lang='chi_sim')
-        return text
-
-    @staticmethod
-    def process_word(docx_path):
-        doc = Document(docx_path)
-        return '\n'.join([paragraph.text for paragraph in doc.paragraphs])
-
-    @staticmethod
-    def process_ppt(pptx_path):
-        prs = Presentation(pptx_path)
-        text = ''
-        for slide in prs.slides:
-            for shape in slide.shapes:
-                if hasattr(shape, 'text'):
-                    text += shape.text + '\n'
-        return text

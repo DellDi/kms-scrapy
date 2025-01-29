@@ -26,7 +26,7 @@ def main():
     # 添加爬虫
     process.crawl(
         ConfluenceSpider,
-        start_url='http://newsee:newsee@kms.new-see.com:8090/pages/viewpage.action?pageId=145719805'
+        start_url='http://kms.new-see.com:8090/pages/viewpage.action?pageId=145719805'
     )
 
     # 启动爬虫
