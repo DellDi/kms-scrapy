@@ -14,8 +14,8 @@ class AuthConfig(BaseModel):
 
 class SpiderConfig(BaseModel):
     """爬虫配置"""
-    download_delay: int = 2
-    concurrent_requests: int = 1
+    download_delay: int = 4
+    concurrent_requests: int = 2
     retry_times: int = 5
     retry_http_codes: list[int] = [500, 502, 503, 504, 408, 429]
     default_headers: Dict[str, str] = {

@@ -1,0 +1,89 @@
+import os
+import re
+from typing import List, Dict, Any
+from .content import KMSItem
+
+class DocumentExporter:
+    """文档导出器，负责将KMSItem对象导出为Markdown文件"""
+
+    def __init__(self, base_dir: str = None):
+        self.base_dir = base_dir or os.getcwd()
+        self.markdown_dir = os.path.join(self.base_dir, 'output', 'markdown')
+        self.attachments_dir = os.path.join(self.base_dir, 'output', 'attachments')
+
+    def _create_dirs(self, safe_title: str) -> tuple[str, str]:
+        """创建必要的目录结构"""
+        doc_markdown_dir = self.markdown_dir
+        doc_attachments_dir = os.path.join(self.attachments_dir, safe_title)
+
+        os.makedirs(doc_markdown_dir, exist_ok=True)
+        os.makedirs(doc_attachments_dir, exist_ok=True)
+
+        return doc_markdown_dir, doc_attachments_dir
+
+    def _sanitize_title(self, title: str) -> str:
+        """将标题中的非法字符替换为下划线"""
+        return re.sub(r'[\\/:*?"<>|]', '_', title)
+
+    def _save_attachments(self, attachments: List[Dict[str, Any]], attachments_dir: str) -> List[Dict[str, str]]:
+        """保存附件文件并返回附件信息列表"""
+        saved_attachments = []
+        for attachment in attachments:
+            # 保存原始附件
+            attachment_path = os.path.join(attachments_dir, attachment['filename'])
+            with open(attachment_path, 'wb') as f:
+                f.write(attachment['content'])
+
+            # 如果有提取的文本内容，保存为txt文件
+            if attachment.get('extracted_text'):
+                base_name = os.path.splitext(attachment['filename'])[0]
+                text_path = os.path.join(attachments_dir, f'{base_name}.txt')
+                with open(text_path, 'w', encoding='utf-8') as f:
+                    f.write(attachment['extracted_text'])
+                saved_attachments.append({
+                    'filename': attachment['filename'],
+                    'path': attachment_path,
+                    'text_path': text_path
+                })
+            else:
+                saved_attachments.append({
+                    'filename': attachment['filename'],
+                    'path': attachment_path
+                })
+        return saved_attachments
+
+    def _build_markdown_content(self, item: KMSItem, attachments_info: List[Dict[str, str]], safe_title: str) -> str:
+        """构建Markdown文档内容"""
+        markdown_content = f'# {item.title}\n\n{item.content}\n\n'
+
+        if attachments_info:
+            markdown_content += '\n## 附件\n\n'
+            for attachment in attachments_info:
+                relative_path = os.path.join('attachments', safe_title, attachment['filename'])
+                markdown_content += f'- [{attachment["filename"]}]({relative_path})\n'
+
+        return markdown_content
+
+    def export(self, item: KMSItem) -> tuple[str, str]:
+        """导出文档为Markdown格式
+
+        Args:
+            item: KMSItem对象，包含文档标题、内容和附件信息
+
+        Returns:
+            tuple: (markdown文件路径, 附件目录路径)
+        """
+        safe_title = self._sanitize_title(item.title)
+        markdown_dir, attachments_dir = self._create_dirs(safe_title)
+
+        # 保存附件
+        attachments_info = self._save_attachments(item.attachments, attachments_dir) if item.attachments else []
+
+        # 构建并保存markdown内容
+        markdown_content = self._build_markdown_content(item, attachments_info, safe_title)
+        markdown_path = os.path.join(markdown_dir, f'{safe_title}.md')
+
+        with open(markdown_path, 'w', encoding='utf-8') as f:
+            f.write(markdown_content)
+
+        return markdown_path, attachments_dir

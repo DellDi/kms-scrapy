@@ -23,10 +23,10 @@ def main():
     # 创建爬虫进程
     process = CrawlerProcess(settings)
 
-    # 添加爬虫
+    # 添加爬虫 2024-2月功能时间轴开始
     process.crawl(
         ConfluenceSpider,
-        start_url='http://kms.new-see.com:8090/pages/viewpage.action?pageId=145719805'
+        start_url='http://kms.new-see.com:8090/pages/viewpage.action?pageId=122356827'
     )
 
     # 启动爬虫
