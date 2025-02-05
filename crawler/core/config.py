@@ -32,6 +32,11 @@ class BaichuanConfig(BaseModel):
     api_key: str
     api_url: str = 'https://api.baichuan-ai.com/v1/chat/completions'
 
+class XunfeiConfig(BaseModel):
+    """讯飞API配置"""
+    api_key: str
+    api_url: str = 'https://spark-api-open.xf-yun.com/v1/chat/completions'
+
 class Config:
     """全局配置类"""
     def __init__(self):
@@ -44,6 +49,9 @@ class Config:
         self.spider = SpiderConfig()
         self.baichuan = BaichuanConfig(
             api_key=os.getenv('BAI_CH_API_KEK')
+        )
+        self.xunfei = XunfeiConfig(
+            api_key=os.getenv('XUNFEI_API_KEY')
         )
 
 # 全局配置实例

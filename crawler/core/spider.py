@@ -4,9 +4,14 @@ from bs4 import BeautifulSoup
 from datetime import datetime
 import requests
 import base64
+import json
+from urllib.parse import urlencode
+
 from .auth import AuthManager
-from .content import ContentParser, KMSItem
 from .config import config
+from .content import ContentParser, KMSItem
+from .exporter import DocumentExporter
+from .optimizer import OptimizerFactory
 
 class ConfluenceSpider(scrapy.Spider):
     name = 'confluence'
@@ -43,7 +48,7 @@ class ConfluenceSpider(scrapy.Spider):
             'Connection': 'keep-alive',
             'Upgrade-Insecure-Requests': '1',
             'Authorization': 'Basic bmV3c2VlOm5ld3NlZQ==',
-            'Cookie':'confluence.list.pages.cookie=list-content-tree; seraph.confluence=149782566%3Adcc80dc3aa14b0a5f57223027a87f61e56afa47d; JSESSIONID=6FB059AC7D7B504817E9B894051AF62B'
+            'Cookie':'ajs_user_id=b855f69db6d93f0a1a50b21008c841d7416fc802; ajs_anonymous_id=be8fadfe-3cd8-4b1b-9c20-c467f8b20eae; seraph.confluence=149782557%3A1bb3a9311bafe3d984d2aeec08c072345263a116; JSESSIONID=240826547C9DA5256525297948C10BC7'
         })
         if cookies:
             headers['Cookie'] = '; '.join(f'{k}={v}' for k, v in cookies.items())
@@ -58,7 +63,7 @@ class ConfluenceSpider(scrapy.Spider):
                 dont_filter=True,
                 meta={
                     'dont_merge_cookies': True,
-                    'handle_httpstatus_list': [302]
+                    'handle_httpstatus_list': [302,200]
                 }
             )
 
@@ -73,26 +78,22 @@ class ConfluenceSpider(scrapy.Spider):
         # 处理登录页面
         if '/login.action' in redirect_url:
             # 获取原始URL，如果meta中没有，则使用当前URL
-            original_url = response.meta.get('original_url', response.url)
             meta = meta or {}
             meta.update({
-                'dont_merge_cookies': True,
-                'handle_httpstatus_list': [302],
-                'original_url': original_url
+                'original_url': response.meta.get('original_url', response.url),
+                'handle_httpstatus_list': [302, 200]
             })
-            headers = self._get_common_headers()
-            return Request(
-                redirect_url,
+            # 使用AuthManager创建登录请求
+            return self.auth_manager.create_login_request(
+                response,
                 callback=self.login,
-                headers=headers,
-                dont_filter=True,
                 meta=meta
             )
         else:
             meta = meta or {}
             meta.update({
                 'dont_merge_cookies': True,
-                'handle_httpstatus_list': [302]
+                'handle_httpstatus_list': [302,200]
             })
             return Request(
                 redirect_url,
@@ -156,96 +157,138 @@ class ConfluenceSpider(scrapy.Spider):
                 return
 
             # 解析导航树（作为可选项）
-            tree_container = soup.select_one('span.plugin_pagetree_children_span')
+            tree_container = soup.select_one('.plugin_pagetree')
             retry_count = response.meta.get('tree_retry_count', 0)
             max_tree_retries = 3  # 导航树最大重试次数
 
             # 检查导航树是否完全加载
-            if tree_container and not tree_container.find_all('a'):
-                if retry_count < max_tree_retries:
-                    self.logger.info(f'导航树未完全加载，第{retry_count + 1}次重试')
-                    meta = response.meta.copy()
-                    meta['tree_retry_count'] = retry_count + 1
-                    # 使用递增的延迟时间
-                    delay = (retry_count + 1) * 3  # 每次重试增加3秒延迟
-                    meta['download_delay'] = delay
-                    yield self.auth_manager.create_authenticated_request(
-                        response.url,
-                        callback=self.parse,
-                        meta=meta
+            if tree_container:
+                # 获取隐藏字段中的参数
+                fieldset = tree_container.select_one('fieldset.hidden')
+                if fieldset:
+                    # 获取基本参数
+                    tree_request_id = fieldset.select_one('input[name="treeRequestId"]')['value']
+                    tree_page_id = fieldset.select_one('input[name="treePageId"]')['value']
+                    root_page_id = fieldset.select_one('input[name="rootPageId"]')['value']
+                    start_depth = fieldset.select_one('input[name="startDepth"]')['value']
+                    mobile = fieldset.select_one('input[name="mobile"]')['value']
+
+                    # 获取祖先ID列表
+                    ancestor_ids = [input_['value'] for input_ in fieldset.select('fieldset.hidden input[name="ancestorId"]')]
+
+                    # 构建完整的请求URL，包含所有查询参数
+                    tree_url = response.urljoin('/plugins/pagetree/naturalchildren.action')
+                    params = {
+                        'decorator': 'none',
+                        'excerpt': 'false',
+                        'sort': 'position',
+                        'reverse': 'false',
+                        'disableLinks': 'false',
+                        'expandCurrent': 'true',
+                        'hasRoot': 'true',
+                        'pageId': root_page_id,
+                        'treeId': '0',
+                        'startDepth': start_depth,
+                        'mobile': mobile,
+                        'treePageId': tree_page_id
+                    }
+
+                    # 添加祖先ID参数
+                    for ancestor_id in ancestor_ids:
+                        params['ancestors'] = ancestor_id
+
+                    # 构建带查询参数的URL
+                    tree_url = f"{tree_url}?{urlencode(params)}"
+
+                    self.logger.info(f'获取到的参数: {params}')
+                    # 构建请求
+                    headers = self._get_common_headers()
+                    headers.update({
+                        'x-requested-with': 'XMLHttpRequest'
+                    })
+
+                    self.logger.info(f'获取到的请求头: {headers}')
+
+                    yield Request(
+                        url=tree_url,
+                        callback=self.parse_tree_ajax,
+                        headers=headers,
+                        meta={
+                            'original_url': response.url,
+                            'dont_merge_cookies': True,
+                            'handle_httpstatus_list': [302,200]
+                        },
+                        dont_filter=True
                     )
                     return
-                else:
-                    self.logger.warning(f'导航树在{max_tree_retries}次重试后仍未完全加载')
 
-            if tree_container:
-                # 解析导航树
-                tree_links = tree_container.find_all('a')
-                self.logger.info(f'找到{len(tree_links)}个导航树链接')
-                # 遍历导航树链接
-                for link in tree_links:
-                    href = link.get('href')
-                    text = link.get_text(strip=True)
-                    if href:
-                        full_url = response.urljoin(href)
-                        self.logger.info(f'处理导航树链接: {text} -> {full_url}')
-                        headers = self._get_common_headers()
-                        yield response.follow(
-                            url=full_url,
-                            callback=self.parse_content,
-                            headers=headers,
-                            dont_filter=True,
-                            meta={
-                                'dont_merge_cookies': True,
-                                'handle_httpstatus_list': [302,200],
-                            }
-                        )
-            else:
-                self.logger.info('当前页面没有导航树，继续处理页面内容')
-                # 没有导航树时，直接处理当前页面内容
-                yield response.follow(
-                    url=response.url,
-                    callback=self.parse_content,
-                    headers=self._get_common_headers(),
-                    dont_filter=True,
-                    meta={
-                        'dont_merge_cookies': True,
-                        'handle_httpstatus_list': [302,200],
-                    }
-                )
+            # 如果没有导航树或无法获取参数，继续处理页面内容
+            self.logger.info('当前页面没有导航树或无法获取参数，继续处理页面内容')
+            yield response.follow(
+                url=response.url,
+                callback=self.parse_content,
+                headers=self._get_common_headers(),
+                dont_filter=True,
+                meta={
+                    'dont_merge_cookies': True,
+                    'handle_httpstatus_list': [302,200],
+                }
+            )
 
     def login(self, response):
         # 检查是否是登录页面
         if '/login.action' in response.url:
-            # 构建登录表单数据
-            # 获取原始目标URL，如果没有则使用起始URL
-            target_url = response.meta.get('original_url', self.start_urls[0])
-            formdata = {
-                'os_username': self.auth['os_username'],
-                'os_password': self.auth['os_password'],
-                'os_cookie': 'true',
-                'os_destination': target_url,  # 使用实际的目标URL
-                'login': '登录'
-            }
-
-            # 使用正确的选择器和登录按钮
-            headers = self._get_common_headers()
-            headers['Cache-Control'] = 'max-age=0'
-            headers['Proxy-Connection'] = 'keep-alive'
-            yield FormRequest.from_response(
+            # 使用AuthManager的create_login_request方法创建登录请求
+            yield self.auth_manager.create_login_request(
                 response,
-                formdata=formdata,
-                formid='loginform',  # 指定登录表单的ID
-                clickdata={'name': 'login'},  # 指定登录按钮
-                headers=headers,
                 callback=self.after_login,
-                dont_filter=True,
                 meta={
-                    'dont_merge_cookies': True,  # 使用新的cookie
-                    'handle_httpstatus_list': [302],  # 处理302重定向
-                    'original_url': formdata['os_destination']  # 保存原始目标URL
+                    'original_url': response.meta.get('original_url', self.start_urls[0]),
+                    'handle_httpstatus_list': [302, 200]  # 添加200状态码的处理
                 }
             )
+
+    def parse_tree_ajax(self, response):
+        """处理导航树Ajax响应"""
+        # 检查响应状态
+        if response.status == 302 or '/login.action' in response.url:
+            yield self._handle_redirect(response)
+            return
+
+        try:
+            # 使用BeautifulSoup解析HTML响应
+            soup = BeautifulSoup(response.text, 'html.parser')
+            # 查找所有页面链接
+            page_links = soup.select('a[href*="viewpage.action"]')
+            self.logger.info(f'成功获取导航树数据: {len(page_links)}个子页面')
+
+            # 处理每个子页面
+            for link in page_links:
+                page_url = response.urljoin(link['href'])
+                title = link.get_text(strip=True)
+                self.logger.info(f'处理子页面: {title} -> {page_url}')
+                headers = self._get_common_headers()
+                yield Request(
+                    url=page_url,
+                    callback=self.parse_content,
+                    headers=headers,
+                    dont_filter=True,
+                    meta={
+                        'dont_merge_cookies': True,
+                        'handle_httpstatus_list': [302,200]
+                    }
+                )
+
+        except Exception as e:
+            self.logger.error(f'解析导航树HTML数据失败: {str(e)}')
+            # 如果解析失败，尝试使用原始URL重试
+            original_url = response.meta.get('original_url')
+            if original_url:
+                yield self.auth_manager.create_authenticated_request(
+                    original_url,
+                    callback=self.parse,
+                    meta=response.meta
+                )
 
     def after_login(self, response):
         # 记录响应状态码和响应头信息
@@ -285,12 +328,13 @@ class ConfluenceSpider(scrapy.Spider):
                 target_url = response.meta.get('original_url', self.start_urls[0])
                 self.logger.info(f'使用原始目标URL: {target_url}')
 
-                # 更新默认cookie
+                # 更新默认cookie和AuthManager的cookie存储
                 self.default_cookies.update(cookies)
-                self.logger.info(f'更新默认cookie: {self.default_cookies}')
+                self.auth_manager.update_cookies(cookies)
+                self.logger.info(f'更新cookie存储: {cookies}')
 
                 # 构建认证头
-                headers = self._get_common_headers(cookies)
+                headers = self._get_common_headers()
 
                 self.logger.info(f'构建的请求头: {headers}')
                 self.logger.info(f'构建的请求目标地址: {target_url}')
@@ -302,8 +346,7 @@ class ConfluenceSpider(scrapy.Spider):
                     dont_filter=True,
                     meta={
                         'dont_merge_cookies': False,  # 登录成功后允许合并cookie
-                        'handle_httpstatus_list': [302],  # 继续处理可能的重定向
-                        # 'cookies': cookies  # 保存cookie信息供后续使用
+                        'handle_httpstatus_list': [302,200]  # 继续处理可能的重定向
                     }
                 )
             else:
@@ -319,38 +362,8 @@ class ConfluenceSpider(scrapy.Spider):
             return None
 
     def optimize_content(self, content: str) -> str:
-        if not self.baichuan_config.get('api_key'):
-            self.logger.warning('未配置百川API密钥，跳过内容优化')
-            return content
-        self.logger.info(f'百川API密钥: {self.baichuan_config["api_key"]}')
-        headers = {
-            'Content-Type': 'application/json',
-            'Authorization': f'Bearer {self.baichuan_config["api_key"]}'
-        }
-        data = {
-            'model':'Baichuan4-Air',
-            'messages': [
-                {
-                    'role': 'system',
-                    'content': '你是一个专业的文档优化助手，需要对输入的文档内容进行结构化和优化处理，使其更加清晰易读，同时保持原有的核心信息和专业性。'
-                },
-                {
-                    'role': 'user',
-                    'content': content
-                }
-            ],
-            'temperature': 0.2,
-            'stream': False
-        }
-
-        try:
-            response = requests.post(self.baichuan_config['api_url'], headers=headers, json=data)
-            response.raise_for_status()
-            result = response.json()
-            return result['choices'][0]['message']['content']
-        except Exception as e:
-            self.logger.error(f'百川API调用失败: {str(e)}')
-            return content
+        optimizer = OptimizerFactory.create_optimizer()
+        return optimizer.optimize(content)
 
     def parse_content(self, response):
         # 检查是否是重定向
@@ -363,7 +376,7 @@ class ConfluenceSpider(scrapy.Spider):
                     cookies.update(response.meta['cookies'])
                 meta = {
                     'dont_merge_cookies': False,
-                    'handle_httpstatus_list': [302],
+                    'handle_httpstatus_list': [302,200],
                     'cookies': cookies,
                     'original_url': response.meta.get('original_url', response.url)
                 }
@@ -382,7 +395,7 @@ class ConfluenceSpider(scrapy.Spider):
                 callback=self.login,
                 meta={
                     'dont_merge_cookies': True,
-                    'handle_httpstatus_list': [302],
+                    'handle_httpstatus_list': [302,200],
                     'original_url': response.meta.get('original_url')
                 }
             )
@@ -445,7 +458,6 @@ class ConfluenceSpider(scrapy.Spider):
         optimized_content = self.optimize_content(content.get_text())
 
         # 创建KMSItem对象
-        from .exporter import DocumentExporter
         kms_item = KMSItem(
             title=title,
             content=optimized_content,
@@ -458,6 +470,8 @@ class ConfluenceSpider(scrapy.Spider):
 
         self.logger.info(f'已保存文档：{markdown_path}')
         self.logger.info(f'附件保存在：{attachments_dir}' if attachments else '无附件')
+        # 先删除已经存在的confluence.json
+        
 
         # 将关键信息yield给Scrapy数据管道
         yield {

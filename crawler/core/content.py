@@ -1,17 +1,18 @@
-from typing import Dict, Any, List
+import os
+import mimetypes
+import urllib.parse
+from typing import Dict, Any, List, Optional
+
 from bs4 import BeautifulSoup
 from PIL import Image
-import pytesseract
-from pdf2image import convert_from_path
 from docx import Document
 from pptx import Presentation
+import pytesseract
+from pdf2image import convert_from_path
 import pylibmagic
 import magic
-import os
 import requests
-import mimetypes
 from pydantic import BaseModel, Field
-from typing import List, Optional
 
 class KMSItem(BaseModel):
     """KMS文档项目"""
@@ -105,7 +106,9 @@ class ContentParser:
 
         file_type = magic.from_buffer(file_response.content, mime=True)
         # 从URL中获取原始文件名，并去除URL参数
+        # 从URL中获取原始文件名，进行URL解码并去除URL参数
         file_name = os.path.basename(file_url).split('?')[0]
+        file_name = urllib.parse.unquote(file_name)
 
         # 如果URL中没有文件后缀，尝试从Content-Type获取
         if '.' not in file_name:
