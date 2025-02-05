@@ -193,12 +193,11 @@ class ConfluenceSpider(scrapy.Spider):
                         'treePageId': tree_page_id
                     }
 
-                    # 添加祖先ID参数
-                    for ancestor_id in ancestor_ids:
-                        params['ancestors'] = ancestor_id
+                    # 添加祖先ID参数（支持多个相同参数名）
+                    params['ancestors'] = ancestor_ids  # urlencode 会自动处理列表值
 
                     # 构建带查询参数的URL
-                    tree_url = f"{tree_url}?{urlencode(params)}"
+                    tree_url = f"{tree_url}?{urlencode(params, doseq=True)}"  # 使用 doseq=True 支持序列
 
                     self.logger.info(f'获取到的参数: {params}')
                     # 构建请求
@@ -258,6 +257,7 @@ class ConfluenceSpider(scrapy.Spider):
         try:
             # 使用BeautifulSoup解析HTML响应
             soup = BeautifulSoup(response.text, 'html.parser')
+            self.logger.info(f'HTML数据: {soup}')
             # 查找所有页面链接
             page_links = soup.select('a[href*="viewpage.action"]')
             self.logger.info(f'成功获取导航树数据: {len(page_links)}个子页面')
@@ -471,7 +471,7 @@ class ConfluenceSpider(scrapy.Spider):
         self.logger.info(f'已保存文档：{markdown_path}')
         self.logger.info(f'附件保存在：{attachments_dir}' if attachments else '无附件')
         # 先删除已经存在的confluence.json
-        
+
 
         # 将关键信息yield给Scrapy数据管道
         yield {
