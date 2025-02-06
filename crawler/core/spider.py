@@ -5,8 +5,9 @@ from datetime import datetime
 import requests
 import base64
 import json
-from urllib.parse import urlencode
+import os
 
+from urllib.parse import urlencode
 from .auth import AuthManager
 from .config import config
 from .content import ContentParser, KMSItem
@@ -40,6 +41,7 @@ class ConfluenceSpider(scrapy.Spider):
             'api_key': config.baichuan.api_key,
             'api_url': config.baichuan.api_url
         }
+
 
     def _get_common_headers(self, cookies=None):
         """获取通用的请求头"""
@@ -257,9 +259,13 @@ class ConfluenceSpider(scrapy.Spider):
         try:
             # 使用BeautifulSoup解析HTML响应
             soup = BeautifulSoup(response.text, 'html.parser')
-            # 查找所有页面链接
-            page_links = soup.select('a[href*="viewpage.action"]')
-            self.logger.info(f'成功获取导航树数据: {len(page_links)}个子页面')
+            # 使用激活的折叠开的节点, 查找li节点且内部节点包含.plugin_pagetree_current
+            current_element = soup.select_one('a.aui-iconfont-chevron-down')
+            active_node = current_element.find_parent('li') if current_element else None
+            self.logger.info(f'获取到的导航树数据: {active_node}')
+            if active_node:
+                page_links = active_node.select('a[href*="viewpage.action"]')
+                self.logger.info(f'成功获取导航树数据: {len(page_links)}个子页面')
 
             # 处理每个子页面
             for link in page_links:
@@ -413,8 +419,8 @@ class ConfluenceSpider(scrapy.Spider):
         # 检查页面是否已完全加载
         retry_count = response.meta.get('retry_count', 0)
         max_retries = 3  # 最大重试次数
-
-        if not title_element or not main_content or not main_content.find_all():
+        # or not main_content.find_all()
+        if not title_element or not main_content:
             if retry_count < max_retries:
                 self.logger.info(f'页面内容未完全加载，第{retry_count + 1}次重试')
                 meta = response.meta.copy()
@@ -469,8 +475,6 @@ class ConfluenceSpider(scrapy.Spider):
 
         self.logger.info(f'已保存文档：{markdown_path}')
         self.logger.info(f'附件保存在：{attachments_dir}' if attachments else '无附件')
-        # 先删除已经存在的confluence.json
-
 
         # 将关键信息yield给Scrapy数据管道
         yield {

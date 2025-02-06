@@ -101,17 +101,25 @@ python main.py
 爬取的数据将保存在 `output` 目录下的 JSON 文件中。
 
 ## 项目结构
-
 ```
 ├── crawler/
-│   ├── core/         # 爬虫核心逻辑
-│   │   ├── auth.py   # 认证模块
-│   │   ├── content.py # 内容解析模块
-│   │   ├── spider.py  # 爬虫主模块
-│   │   └── optimizer.py # AI优化模块
-│   └── test/         # 测试用例
-├── main.py          # 程序入口
-└── pyproject.toml   # 项目配置和依赖管理
+│   ├── core/           # 爬虫核心逻辑
+│   │   ├── auth.py     # 认证和会话管理
+│   │   ├── config.py   # 配置管理模块
+│   │   ├── content.py  # 内容解析和处理
+│   │   ├── exporter.py # 文档导出工具
+│   │   ├── optimizer.py # AI 内容优化
+│   │   └── spider.py   # 爬虫主程序
+│   └── test/           # 测试用例
+├── output/             # 输出文件目录
+│   ├── docs/          # Markdown 文档
+│   └── attachments/   # 附件文件
+├── .env               # 环境变量配置
+├── .env.template      # 环境变量模板
+├── main.py           # 程序入口
+├── pyproject.toml    # 项目配置和依赖
+├── requirements.txt  # 依赖清单
+└── uv.lock          # UV 锁定文件
 ```
 
 ## 开发

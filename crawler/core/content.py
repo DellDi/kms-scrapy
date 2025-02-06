@@ -1,6 +1,7 @@
 import os
 import mimetypes
 import urllib.parse
+import logging
 from typing import Dict, Any, List, Optional
 
 from bs4 import BeautifulSoup
@@ -11,6 +12,7 @@ import pytesseract
 from pdf2image import convert_from_path
 import pylibmagic
 import magic
+
 import requests
 from pydantic import BaseModel, Field
 
@@ -35,7 +37,7 @@ class ContentParser:
     """内容解析器，处理页面内容和附件"""
     def __init__(self, enable_text_extraction: bool = True, content_optimizer = None):
         """初始化解析器
-        
+
         Args:
             enable_text_extraction: 是否启用文本提取功能，默认为False
             content_optimizer: 内容优化器实例，用于美化提取的文本
@@ -58,11 +60,9 @@ class ContentParser:
             image = Image.open(image_path)
             return pytesseract.image_to_string(image, lang='chi_sim')
         except pytesseract.TesseractNotFoundError:
-            import logging
             logging.error('Tesseract OCR未安装或未添加到PATH中。请参考README文件安装必要的系统依赖。')
             return None
         except Exception as e:
-            import logging
             logging.warning(f'图片文本提取失败: {str(e)}')
             return None
 
@@ -76,7 +76,6 @@ class ContentParser:
                 text += pytesseract.image_to_string(page, lang='chi_sim')
             return text
         except (pytesseract.TesseractNotFoundError, Exception) as e:
-            import logging
             logging.warning(f'PDF文本提取失败: {str(e)}')
             return None
 
@@ -87,7 +86,6 @@ class ContentParser:
             doc = Document(docx_path)
             return '\n'.join([paragraph.text for paragraph in doc.paragraphs])
         except Exception as e:
-            import logging
             logging.warning(f'Word文本提取失败: {str(e)}')
             return None
 
@@ -103,7 +101,6 @@ class ContentParser:
                         text.append(shape.text)
             return '\n'.join(text)
         except Exception as e:
-            import logging
             logging.warning(f'PPT文本提取失败: {str(e)}')
             return None
 
@@ -141,7 +138,7 @@ class ContentParser:
                     text = self.process_word(temp_path)
                 elif 'powerpoint' in file_type:
                     text = self.process_ppt(temp_path)
-                
+
                 if text and self.content_optimizer:
                     text = self.content_optimizer.optimize(text)
                     # 将优化后的文本内容设置为Markdown格式

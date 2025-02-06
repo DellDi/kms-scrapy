@@ -7,7 +7,9 @@ def main():
     # 创建输出目录
     output_dir = "output"
     os.makedirs(output_dir, exist_ok=True)
-
+    # 先判断输出的output目录下是否存在管道记录文件,存在那么先删除掉
+    if os.path.exists(os.path.join(output_dir, f'${ConfluenceSpider.name}.json')):
+        os.remove(os.path.join(output_dir, f'${ConfluenceSpider.name}.json'))
     # 配置Scrapy设置
     settings = get_project_settings()
     settings.update({

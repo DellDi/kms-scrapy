@@ -1,6 +1,6 @@
 import os
 import re
-from typing import List, Dict, Any
+from typing import Optional, List, Dict, Any
 from .content import KMSItem
 
 class DocumentExporter:
@@ -11,12 +11,16 @@ class DocumentExporter:
         self.markdown_dir = os.path.join(self.base_dir, 'output', 'markdown')
         self.attachments_dir = os.path.join(self.base_dir, 'output', 'attachments')
 
-    def _create_dirs(self, safe_title: str) -> tuple[str, str]:
+    def _create_dirs(self, safe_title: str, attachments: Optional[List[dict]] = []) -> tuple[str, str]:
         """创建必要的目录结构"""
-        doc_markdown_dir = self.markdown_dir
-        doc_attachments_dir = os.path.join(self.attachments_dir, safe_title)
+        doc_markdown_dir = os.path.join(self.markdown_dir, safe_title)
+        """给对应的标题创建对应的目录"""
+        # doc_attachments_dir = os.path.join(self.attachments_dir, safe_title)
+        """给对应的md文件创建对应的附件目录"""
+        doc_attachments_dir = os.path.join(doc_markdown_dir, 'attachments')
         os.makedirs(doc_markdown_dir, exist_ok=True)
-        os.makedirs(doc_attachments_dir, exist_ok=True)
+        if len(attachments) > 0:
+            os.makedirs(doc_attachments_dir, exist_ok=True)
 
         return doc_markdown_dir, doc_attachments_dir
 
@@ -32,11 +36,20 @@ class DocumentExporter:
             attachment_path = os.path.join(attachments_dir, attachment['filename'])
             with open(attachment_path, 'wb') as f:
                 f.write(attachment['content'])
-
-            # 如果有提取的文本内容，保存为txt文件
+            # 如果有提取的文本内容，保存为文本格式的文件
             if attachment.get('extracted_text'):
                 base_name = os.path.splitext(attachment['filename'])[0]
-                text_path = os.path.join(attachments_dir, f'{base_name}.txt')
+                # 根据文件类型保存对应的文本文件
+                if attachment['type'] == 'text/plain':
+                    base_name = f'{base_name}.txt'
+                elif attachment['type'] == 'text/html':
+                    base_name = f'{base_name}.html'
+                elif attachment['type'] == 'text/markdown':
+                    base_name = f'{base_name}.md'
+                else:
+                    base_name = f'{base_name}.txt'
+
+                text_path = os.path.join(attachments_dir, base_name)
                 with open(text_path, 'w', encoding='utf-8') as f:
                     f.write(attachment['extracted_text'])
                 saved_attachments.append({
@@ -58,7 +71,7 @@ class DocumentExporter:
         if attachments_info:
             markdown_content += '\n## 附件\n\n'
             for attachment in attachments_info:
-                relative_path = os.path.join('attachments', safe_title, attachment['filename'])
+                relative_path = os.path.join('attachments', attachment['filename'])
                 markdown_content += f'- [{attachment["filename"]}]({relative_path})\n'
 
         return markdown_content
@@ -73,7 +86,7 @@ class DocumentExporter:
             tuple: (markdown文件路径, 附件目录路径)
         """
         safe_title = self._sanitize_title(item.title)
-        markdown_dir, attachments_dir = self._create_dirs(safe_title)
+        markdown_dir, attachments_dir = self._create_dirs(safe_title, item.attachments)
 
         # 保存附件
         attachments_info = self._save_attachments(item.attachments, attachments_dir) if item.attachments else []
