@@ -29,7 +29,7 @@ class ConfluenceSpider(scrapy.Spider):
         super().__init__(*args, **kwargs)
         self.start_urls = [kwargs.get('start_url', 'http://kms.new-see.com:8090')]
         self.auth_manager = AuthManager()
-        self.content_parser = ContentParser()
+        self.content_parser = ContentParser(enable_text_extraction=True, content_optimizer=OptimizerFactory.create_optimizer())
         self.basic_auth = (config.auth.basic_auth_user, config.auth.basic_auth_pass)
         self.auth = {
             'os_username': config.auth.username,
@@ -257,7 +257,6 @@ class ConfluenceSpider(scrapy.Spider):
         try:
             # 使用BeautifulSoup解析HTML响应
             soup = BeautifulSoup(response.text, 'html.parser')
-            self.logger.info(f'HTML数据: {soup}')
             # 查找所有页面链接
             page_links = soup.select('a[href*="viewpage.action"]')
             self.logger.info(f'成功获取导航树数据: {len(page_links)}个子页面')

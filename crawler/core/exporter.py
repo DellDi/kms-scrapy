@@ -15,7 +15,6 @@ class DocumentExporter:
         """创建必要的目录结构"""
         doc_markdown_dir = self.markdown_dir
         doc_attachments_dir = os.path.join(self.attachments_dir, safe_title)
-
         os.makedirs(doc_markdown_dir, exist_ok=True)
         os.makedirs(doc_attachments_dir, exist_ok=True)
 
