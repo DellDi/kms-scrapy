@@ -146,9 +146,9 @@ class TreeExtractor:
                 tree_params = {
                     'treePageId': url_params.get('pageId', [None])[0]
                 }
-                
+
                 # 在active_node中查找未展开节点
-                unexpanded_nodes = active_node.select("a.aui-iconfont-chevron-right")
+                unexpanded_nodes = active_node.select("li a.aui-iconfont-chevron-right")
                 for node in unexpanded_nodes:
                     li_node = node.find_parent("li")
                     if li_node and li_node.select_one("span.plugin_pagetree_children_span"):

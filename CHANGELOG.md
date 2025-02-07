@@ -1,8 +1,4 @@
-# Changelog
-
-## [Unreleased]
-
-### 重构
+# Changelog### 重构
 - 重构树结构提取相关代码 @2025-02-07
   - 创建 TreeExtractor 类专门处理导航树解析逻辑
   - 从 ConfluenceSpider 类中分离树结构处理代码
@@ -19,4 +15,6 @@
 - 修复导航树节点递归处理问题 @2025-02-07
   - 添加缺失的必要参数（startDepth，mobile，treePageId）
   - 限制未展开节点处理在active_node范围内
-  - 优化参数传递机制，确保递归处理正确性
+  - 优化参数传递机制，确保递归处理正确性## [Unreleased]
+### Fix
+- 优化树节点提取器(TreeExtractor)的选择范围，限制为仅获取active节点下第一层级的未展开节点 @2025-02-08
