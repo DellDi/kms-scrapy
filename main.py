@@ -28,7 +28,7 @@ def main():
     # 添加爬虫 2024-2月功能时间轴开始
     process.crawl(
         ConfluenceSpider,
-        start_url='http://kms.new-see.com:8090/pages/viewpage.action?pageId=145719696'
+        start_url="http://kms.new-see.com:8090/pages/viewpage.action?pageId=27364154",
     )
 
     # 启动爬虫
