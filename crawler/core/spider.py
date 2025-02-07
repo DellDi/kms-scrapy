@@ -2,17 +2,13 @@ import scrapy
 from scrapy.http import Request, FormRequest
 from bs4 import BeautifulSoup
 from datetime import datetime
-import requests
-import base64
-import json
-import os
 
-from urllib.parse import urlencode
 from .auth import AuthManager
 from .config import config
 from .content import ContentParser, KMSItem
 from .exporter import DocumentExporter
 from .optimizer import OptimizerFactory
+from .tree_extractor import TreeExtractor
 
 class ConfluenceSpider(scrapy.Spider):
     name = 'confluence'
@@ -25,23 +21,22 @@ class ConfluenceSpider(scrapy.Spider):
         'DEFAULT_REQUEST_HEADERS': config.spider.default_headers,
         'Cookie': ''
     }
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.start_urls = [kwargs.get('start_url', 'http://kms.new-see.com:8090')]
-        self.auth_manager = AuthManager()
-        self.content_parser = ContentParser(enable_text_extraction=True, content_optimizer=OptimizerFactory.create_optimizer())
-        self.basic_auth = (config.auth.basic_auth_user, config.auth.basic_auth_pass)
-        self.auth = {
-            'os_username': config.auth.username,
-            'os_password': config.auth.password
-        }
-        self.default_cookies = config.spider.default_cookies
-        self.baichuan_config = {
-            'api_key': config.baichuan.api_key,
-            'api_url': config.baichuan.api_url
-        }
-
+def __init__(self, *args, **kwargs):
+    super().__init__(*args, **kwargs)
+    self.start_urls = [kwargs.get('start_url', 'http://kms.new-see.com:8090')]
+    self.auth_manager = AuthManager()
+    self.content_parser = ContentParser(enable_text_extraction=True, content_optimizer=OptimizerFactory.create_optimizer())
+    self.basic_auth = (config.auth.basic_auth_user, config.auth.basic_auth_pass)
+    self.auth = {
+        'os_username': config.auth.username,
+        'os_password': config.auth.password
+    }
+    self.default_cookies = config.spider.default_cookies
+    self.baichuan_config = {
+        'api_key': config.baichuan.api_key,
+        'api_url': config.baichuan.api_url
+    }
+    self.tree_extractor = TreeExtractor(self._get_common_headers)  # 初始化树结构提取器
 
     def _get_common_headers(self, cookies=None):
         """获取通用的请求头"""
@@ -108,133 +103,57 @@ class ConfluenceSpider(scrapy.Spider):
         # 如果是重定向到登录页面
         if response.status == 302 or '/login.action' in response.url:
             yield self._handle_redirect(response)
+            return
+            
         # 处理内容页面
-        else:
-            self.logger.info(f'开始处理页面: {response}')
-            # 检查页面是否已完全加载
-            soup = BeautifulSoup(response.text, 'html.parser')
-            title_element = soup.select_one('#title-text')
-            main_content = soup.select_one('#main-content')
+        self.logger.info(f'开始处理页面: {response}')
+        
+        # 解析页面内容
+        soup = BeautifulSoup(response.text, 'html.parser')
+        title_element = soup.select_one('#title-text')
+        main_content = soup.select_one('#main-content')
+        
+        # 检查页面是否已完全加载
+        if not title_element or not main_content:
             retry_count = response.meta.get('retry_count', 0)
-            max_retries = 3  # 最大重试次数
-
-            # 检查页面关键元素是否加载
-            if not title_element or not main_content:
-                if retry_count < max_retries:
-                    self.logger.info(f'页面未完全加载，第{retry_count + 1}次重试')
-                    meta = response.meta.copy()
-                    meta['retry_count'] = retry_count + 1
-                    # 增加延迟，避免过于频繁的请求
-                    meta['download_delay'] = (retry_count + 1) * 2
-                    yield self.auth_manager.create_authenticated_request(
-                        response.url,
-                        callback=self.parse,
-                        meta=meta
-                    )
-                else:
-                    self.logger.warning(f'页面 {response.url} 在{max_retries}次重试后仍未完全加载，跳过处理')
-                return
-            # 检查页面是否已完全加载
-            soup = BeautifulSoup(response.text, 'html.parser')
-            title_element = soup.select_one('#title-text')
-            main_content = soup.select_one('#main-content')
-            retry_count = response.meta.get('retry_count', 0)
-            max_retries = 3  # 最大重试次数
-
-            # 检查页面关键元素是否加载
-            if not title_element or not main_content:
-                if retry_count < max_retries:
-                    self.logger.info(f'页面未完全加载，第{retry_count + 1}次重试')
-                    meta = response.meta.copy()
-                    meta['retry_count'] = retry_count + 1
-                    # 增加延迟，避免过于频繁的请求
-                    meta['download_delay'] = (retry_count + 1) * 2
-                    yield self.auth_manager.create_authenticated_request(
-                        response.url,
-                        callback=self.parse,
-                        meta=meta
-                    )
-                else:
-                    self.logger.warning(f'页面 {response.url} 在{max_retries}次重试后仍未完全加载，跳过处理')
-                return
-
-            # 解析导航树（作为可选项）
-            tree_container = soup.select_one('.plugin_pagetree')
-            retry_count = response.meta.get('tree_retry_count', 0)
-            max_tree_retries = 3  # 导航树最大重试次数
-
-            # 检查导航树是否完全加载
-            if tree_container:
-                # 获取隐藏字段中的参数
-                fieldset = tree_container.select_one('fieldset.hidden')
-                if fieldset:
-                    # 获取基本参数
-                    tree_request_id = fieldset.select_one('input[name="treeRequestId"]')['value']
-                    tree_page_id = fieldset.select_one('input[name="treePageId"]')['value']
-                    root_page_id = fieldset.select_one('input[name="rootPageId"]')['value']
-                    start_depth = fieldset.select_one('input[name="startDepth"]')['value']
-                    mobile = fieldset.select_one('input[name="mobile"]')['value']
-
-                    # 获取祖先ID列表
-                    ancestor_ids = [input_['value'] for input_ in fieldset.select('fieldset.hidden input[name="ancestorId"]')]
-
-                    # 构建完整的请求URL，包含所有查询参数
-                    tree_url = response.urljoin('/plugins/pagetree/naturalchildren.action')
-                    params = {
-                        'decorator': 'none',
-                        'excerpt': 'false',
-                        'sort': 'position',
-                        'reverse': 'false',
-                        'disableLinks': 'false',
-                        'expandCurrent': 'true',
-                        'hasRoot': 'true',
-                        'pageId': root_page_id,
-                        'treeId': '0',
-                        'startDepth': start_depth,
-                        'mobile': mobile,
-                        'treePageId': tree_page_id
-                    }
-
-                    # 添加祖先ID参数（支持多个相同参数名）
-                    params['ancestors'] = ancestor_ids  # urlencode 会自动处理列表值
-
-                    # 构建带查询参数的URL
-                    tree_url = f"{tree_url}?{urlencode(params, doseq=True)}"  # 使用 doseq=True 支持序列
-
-                    self.logger.info(f'获取到的参数: {params}')
-                    # 构建请求
-                    headers = self._get_common_headers()
-                    headers.update({
-                        'x-requested-with': 'XMLHttpRequest'
-                    })
-
-                    self.logger.info(f'获取到的请求头: {headers}')
-
-                    yield Request(
-                        url=tree_url,
-                        callback=self.parse_tree_ajax,
-                        headers=headers,
-                        meta={
-                            'original_url': response.url,
-                            'dont_merge_cookies': True,
-                            'handle_httpstatus_list': [302,200]
-                        },
-                        dont_filter=True
-                    )
-                    return
-
-            # 如果没有导航树或无法获取参数，继续处理页面内容
-            self.logger.info('当前页面没有导航树或无法获取参数，继续处理页面内容')
-            yield response.follow(
-                url=response.url,
-                callback=self.parse_content,
-                headers=self._get_common_headers(),
-                dont_filter=True,
-                meta={
-                    'dont_merge_cookies': True,
-                    'handle_httpstatus_list': [302,200],
-                }
-            )
+            max_retries = 3
+            
+            if retry_count < max_retries:
+                self.logger.info(f'页面未完全加载，第{retry_count + 1}次重试')
+                meta = response.meta.copy()
+                meta['retry_count'] = retry_count + 1
+                meta['download_delay'] = (retry_count + 1) * 2
+                yield self.auth_manager.create_authenticated_request(
+                    response.url,
+                    callback=self.parse,
+                    meta=meta
+                )
+            else:
+                self.logger.warning(f'页面 {response.url} 在{max_retries}次重试后仍未完全加载，跳过处理')
+            return
+        
+        # 尝试处理导航树
+        tree_request = self.tree_extractor.process_tree_container(response, soup)
+        if tree_request:
+            # 设置回调以处理树结构内容
+            tree_request.callback = self.tree_extractor.parse_tree_ajax
+            # 设置内容解析回调
+            self.tree_extractor.parse_content_callback = self.parse_content
+            yield tree_request
+            return
+            
+        # 如果没有导航树或无法处理，继续处理当前页面内容
+        self.logger.info('继续处理页面内容')
+        yield response.follow(
+            url=response.url,
+            callback=self.parse_content,
+            headers=self._get_common_headers(),
+            dont_filter=True,
+            meta={
+                'dont_merge_cookies': True,
+                'handle_httpstatus_list': [302,200],
+            }
+        )
 
     def login(self, response):
         # 检查是否是登录页面
@@ -248,52 +167,6 @@ class ConfluenceSpider(scrapy.Spider):
                     'handle_httpstatus_list': [302, 200]  # 添加200状态码的处理
                 }
             )
-
-    def parse_tree_ajax(self, response):
-        """处理导航树Ajax响应"""
-        # 检查响应状态
-        if response.status == 302 or '/login.action' in response.url:
-            yield self._handle_redirect(response)
-            return
-
-        try:
-            # 使用BeautifulSoup解析HTML响应
-            soup = BeautifulSoup(response.text, 'html.parser')
-            # 使用激活的折叠开的节点, 查找li节点且内部节点包含.plugin_pagetree_current
-            current_element = soup.select_one('a.aui-iconfont-chevron-down')
-            active_node = current_element.find_parent('li') if current_element else None
-            self.logger.info(f'获取到的导航树数据: {active_node}')
-            if active_node:
-                page_links = active_node.select('a[href*="viewpage.action"]')
-                self.logger.info(f'成功获取导航树数据: {len(page_links)}个子页面')
-
-            # 处理每个子页面
-            for link in page_links:
-                page_url = response.urljoin(link['href'])
-                title = link.get_text(strip=True)
-                self.logger.info(f'处理子页面: {title} -> {page_url}')
-                headers = self._get_common_headers()
-                yield Request(
-                    url=page_url,
-                    callback=self.parse_content,
-                    headers=headers,
-                    dont_filter=True,
-                    meta={
-                        'dont_merge_cookies': True,
-                        'handle_httpstatus_list': [302,200]
-                    }
-                )
-
-        except Exception as e:
-            self.logger.error(f'解析导航树HTML数据失败: {str(e)}')
-            # 如果解析失败，尝试使用原始URL重试
-            original_url = response.meta.get('original_url')
-            if original_url:
-                yield self.auth_manager.create_authenticated_request(
-                    original_url,
-                    callback=self.parse,
-                    meta=response.meta
-                )
 
     def after_login(self, response):
         # 记录响应状态码和响应头信息
@@ -419,8 +292,8 @@ class ConfluenceSpider(scrapy.Spider):
         # 检查页面是否已完全加载
         retry_count = response.meta.get('retry_count', 0)
         max_retries = 3  # 最大重试次数
-        # or not main_content.find_all()
-        if not title_element or not main_content:
+
+        if not title_element or not main_content or not main_content.find_all():
             if retry_count < max_retries:
                 self.logger.info(f'页面内容未完全加载，第{retry_count + 1}次重试')
                 meta = response.meta.copy()
@@ -475,6 +348,8 @@ class ConfluenceSpider(scrapy.Spider):
 
         self.logger.info(f'已保存文档：{markdown_path}')
         self.logger.info(f'附件保存在：{attachments_dir}' if attachments else '无附件')
+        # 先删除已经存在的confluence.json
+
 
         # 将关键信息yield给Scrapy数据管道
         yield {
