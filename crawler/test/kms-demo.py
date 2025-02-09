@@ -3,7 +3,7 @@ from scrapy.http import Request
 from bs4 import BeautifulSoup
 
 class KMSDemoSpider(scrapy.Spider):
-    name = 'kms-demo'
+    name = 'kms-newsee'
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -48,7 +48,7 @@ class KMSDemoSpider(scrapy.Spider):
 def main():
     # 配置Scrapy设置
     settings = {
-        'BOT_NAME': 'kms-demo',
+        'BOT_NAME': 'kms-newsee',
         'SPIDER_MODULES': ['crawler.test'],
         'NEWSPIDER_MODULE': 'crawler.test',
         'DOWNLOAD_DELAY': 2,

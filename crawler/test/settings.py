@@ -1,6 +1,6 @@
 # Scrapy settings
 
-BOT_NAME = 'kms-demo'
+BOT_NAME = 'kms-newsee'
 
 SPIDER_MODULES = ['crawler.test']
 NEWSPIDER_MODULE = 'crawler.test'

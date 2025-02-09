@@ -133,7 +133,7 @@ class TreeExtractor:
                 # 否则按原逻辑查找活动节点
                 page_id = original_url.split("=")[-1]
                 page_links = [link for link in page_links_all if page_id in link["href"]]
-                active_node = page_links[0].find_parent("ul") if page_links else None
+                active_node = page_links[0].find_parent("li") if page_links else None
                 if active_node:
                     page_links = active_node.select('a[href*="viewpage.action"]')
 

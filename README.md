@@ -25,12 +25,12 @@
 - Python >= 3.11
 - 系统依赖：
   - **Tesseract OCR**
-    - 用于图片和PDF文字识别
+    - 用于图片和 PDF 文字识别
     - macOS: `brew install tesseract tesseract-lang`
     - Ubuntu: `sudo apt-get install tesseract-ocr tesseract-ocr-chi-sim`
-    - Windows: 下载安装[Tesseract安装包](https://github.com/UB-Mannheim/tesseract/wiki)
+    - Windows: 下载安装[Tesseract 安装包](https://github.com/UB-Mannheim/tesseract/wiki)
   - **Poppler**
-    - 用于PDF文件处理
+    - 用于 PDF 文件处理
     - macOS: `brew install poppler`
     - Ubuntu: `sudo apt-get install poppler-utils`
     - Windows: 下载[Poppler for Windows](http://blog.alivate.com.au/poppler-windows/)
@@ -38,7 +38,7 @@
     - 用于文件类型检测
     - macOS: `brew install libmagic`
     - Ubuntu: `sudo apt-get install libmagic1`
-    - Windows: 包含在Windows版Python包中
+    - Windows: 包含在 Windows 版 Python 包中
 
 ## 安装
 
@@ -61,7 +61,7 @@ source .venv/bin/activate  # Linux/macOS
 uv pip install -e .  # 通过 pyproject.toml 安装项目及其依赖
 ```
 
-或者使用传统的pip安装：
+或者使用传统的 pip 安装：
 
 ```bash
 python -m venv .venv
@@ -101,6 +101,7 @@ python main.py
 爬取的数据将保存在 `output` 目录下的 JSON 文件中。
 
 ## 项目结构
+
 ```
 ├── crawler/
 │   ├── core/           # 爬虫核心逻辑
