@@ -28,7 +28,7 @@ class ConfluenceSpider(scrapy.Spider):
         self.start_urls = [kwargs.get("start_url", "http://kms.new-see.com:8090")]
         self.auth_manager = AuthManager()
         self.content_parser = ContentParser(
-            enable_text_extraction=True, content_optimizer=OptimizerFactory.create_optimizer()
+            enable_text_extraction=False, content_optimizer=OptimizerFactory.create_optimizer()
         )
         self.basic_auth = (config.auth.basic_auth_user, config.auth.basic_auth_pass)
         self.auth = {"os_username": config.auth.username, "os_password": config.auth.password}
