@@ -42,16 +42,22 @@ class ConfluenceSpider(scrapy.Spider):
     def _get_common_headers(self, cookies=None):
         """获取通用的请求头"""
         headers = config.spider.default_headers.copy()
+        cookies_auth =  AuthManager.get_cookies()
+        Cookie = "; ".join(f"{k}={v}" for k, v in cookies_auth.items())
         headers.update(
             {
                 "Connection": "keep-alive",
                 "Upgrade-Insecure-Requests": "1",
                 "Authorization": "Basic bmV3c2VlOm5ld3NlZQ==",
-                "Cookie": "ajs_user_id=b855f69db6d93f0a1a50b21008c841d7416fc802; ajs_anonymous_id=be8fadfe-3cd8-4b1b-9c20-c467f8b20eae; seraph.confluence=149782557%3A1bb3a9311bafe3d984d2aeec08c072345263a116; JSESSIONID=240826547C9DA5256525297948C10BC7",
+                "Cookie": Cookie,
+                # "Cookie": "ajs_user_id=b855f69db6d93f0a1a50b21008c841d7416fc802; ajs_anonymous_id=be8fadfe-3cd8-4b1b-9c20-c467f8b20eae; seraph.confluence=149782557%3A1bb3a9311bafe3d984d2aeec08c072345263a116; JSESSIONID=240826547C9DA5256525297948C10BC7",
             }
         )
+
         if cookies:
             headers["Cookie"] = "; ".join(f"{k}={v}" for k, v in cookies.items())
+
+        self.logger.info(f"_get_common_headers-headers: {headers}")
         return headers
 
     def start_requests(self):
@@ -149,8 +155,9 @@ class ConfluenceSpider(scrapy.Spider):
         )
 
     def login(self, response):
+        self.logger.info(f"{response.url} --- 尝试登录")
         # 检查是否是登录页面
-        if "/login.action" in response.url:
+        if "/dologin.action" in response.url:
             # 使用AuthManager的create_login_request方法创建登录请求
             yield self.auth_manager.create_login_request(
                 response,
@@ -175,8 +182,9 @@ class ConfluenceSpider(scrapy.Spider):
             seraph_found = False
 
             # 记录Set-Cookie头信息并解析
-            self.logger.info("开始处理cookie信息")
-            for cookie in response.headers.getlist("Set-Cookie"):
+            res_set_cookies = response.headers.getlist("Set-Cookie")
+            self.logger.info(f"开始处理cookie信息, {res_set_cookies}")
+            for cookie in res_set_cookies:
                 cookie_str = cookie.decode()
                 self.logger.info(f"处理cookie: {cookie_str}")
 
@@ -216,7 +224,7 @@ class ConfluenceSpider(scrapy.Spider):
                     headers=headers,
                     dont_filter=True,
                     meta={
-                        "dont_merge_cookies": False,  # 登录成功后允许合并cookie
+                        "dont_merge_cookies": True,  # 登录成功后允许合并cookie
                         "handle_httpstatus_list": [302, 200],  # 继续处理可能的重定向
                     },
                 )

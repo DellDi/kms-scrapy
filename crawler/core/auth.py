@@ -50,7 +50,6 @@ class AuthManager:
             "os_destination": target_url,
             "login": "登录",
         }
-
         # 直接构造登录请求
         return FormRequest(
             url=response.urljoin("/dologin.action"),
@@ -59,7 +58,7 @@ class AuthManager:
             headers={
                 **AuthManager.get_auth_headers(),
                 "Content-Type": "application/x-www-form-urlencoded",
-                "Referer": response.url
+                "Referer": response.url,
             },
             cookies=response.headers.getlist("Set-Cookie"),
             callback=callback,
