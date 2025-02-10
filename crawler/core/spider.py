@@ -82,6 +82,7 @@ class ConfluenceSpider(scrapy.Spider):
                     "handle_httpstatus_list": [302, 200],
                 }
             )
+            self.logger.info(f"response ----> {response}")
             # 使用AuthManager创建登录请求
             return self.auth_manager.create_login_request(response, callback=self.login, meta=meta)
         else:

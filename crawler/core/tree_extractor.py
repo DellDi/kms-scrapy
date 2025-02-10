@@ -174,7 +174,19 @@ class TreeExtractor:
                     callback=self.parse_content_callback,
                     headers=headers,
                     dont_filter=True,
-                    meta={"dont_merge_cookies": True, "handle_httpstatus_list": [302, 200]},
+                    meta={
+                        "dont_merge_cookies": True,
+                        "handle_httpstatus_list": [302, 200],
+                        "depth_info": {
+                            "current_depth": current_depth,
+                            "ancestor_ids": tree_params.get("ancestors", []),
+                            "ancestor_titles": [
+                                a.get_text(strip=True)
+                                for a in active_node.find_previous_siblings("a")
+                            ],
+                            "current_title": link.get_text(strip=True),
+                        },
+                    },
                 )
 
         except Exception as e:

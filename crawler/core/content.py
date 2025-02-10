@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 class KMSItem(BaseModel):
     """KMS文档项目"""
     title: str
+    depth_info: Optional[dict] = Field(default=None, description="页面深度信息")
     content: str
     attachments: Optional[List[dict]] = []
 
