@@ -94,8 +94,8 @@ class TreeExtractor:
         }
 
         # 如果提供了tree_params，使用其中的treePageId
-        if tree_params and 'treePageId' in tree_params:
-            params['treePageId'] = tree_params['treePageId']
+        if tree_params and "treePageId" in tree_params:
+            params["treePageId"] = tree_params["treePageId"]
 
         tree_url = response.urljoin("/plugins/pagetree/naturalchildren.action")
         tree_url = f"{tree_url}?{urlencode(params)}"
@@ -125,10 +125,11 @@ class TreeExtractor:
             # 获取当前活动节点
             original_url = response.meta.get("original_url")
             page_links_all = soup.select('a[href*="viewpage.action"]')
-
+            active_node = None
             # 如果是节点展开请求，直接处理返回的链接
             if response.meta.get("is_expansion"):
                 page_links = page_links_all
+                active_node = soup
             else:
                 # 否则按原逻辑查找活动节点
                 page_id = original_url.split("=")[-1]
@@ -140,12 +141,11 @@ class TreeExtractor:
             self.logger.info(f"成功获取导航树数据: {len(page_links)}个页面")
 
             # 1. 首先在active_node中处理未展开节点
-            if not response.meta.get("is_expansion") and active_node:
+            # if not response.meta.get("is_expansion") and active_node:
+            if active_node:
                 # 获取必要的参数
                 url_params = parse_qs(original_url.split("?")[-1])
-                tree_params = {
-                    'treePageId': url_params.get('pageId', [None])[0]
-                }
+                tree_params = {"treePageId": url_params.get("pageId", [None])[0]}
 
                 # 在active_node中查找未展开节点
                 unexpanded_nodes = active_node.select("li a.aui-iconfont-chevron-right")
