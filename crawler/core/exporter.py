@@ -17,34 +17,21 @@ class DocumentExporter:
     ) -> tuple[str, str]:
         """创建必要的目录结构"""
         if depth_info:
-            current_depth = depth_info.get("current_depth", 0)
-            ancestors = depth_info.get("ancestor_ids", [])
-
-            # 生成层级目录路径（最多保留最近5层）
-            # 获取当前页面标题并清理
-            # 获取标题链
-            ancestor_titles = depth_info.get("ancestor_titles", [])
-            current_title = depth_info.get("current_title", "")
-
-            # 清理并截断标题
-            safe_titles = [
-                re.sub(r'[\\/:*?"<>|]', "_", t)[:20] for t in ancestor_titles[-5:] + [current_title]
-            ]
-
-            # 生成目录结构：层级+标题
-            # 生成带序号的目录结构
-            dir_parts = [f"{i:02d}-{safe_titles[i]}" for i in range(len(safe_titles))]
-            # 添加当前深度目录
-            dir_parts.append(f"{current_depth:02d}-{safe_titles[-1]}")
-            doc_markdown_dir = os.path.join(self.markdown_dir, *dir_parts)
+            # 直接使用传入的输出路径
+            output_path = depth_info.get("output_path")
+            if output_path:
+                doc_markdown_dir = os.path.join(self.markdown_dir, output_path)
+            else:
+                # 如果没有提供输出路径，使用安全的标题
+                doc_markdown_dir = os.path.join(self.markdown_dir, safe_title)
+            os.makedirs(doc_markdown_dir, exist_ok=True)
         else:
             doc_markdown_dir = os.path.join(self.markdown_dir, safe_title)
-        """给对应的标题创建对应的目录"""
-        # doc_attachments_dir = os.path.join(self.attachments_dir, safe_title)
-        """给对应的md文件创建对应的附件目录"""
+            os.makedirs(doc_markdown_dir, exist_ok=True)
+        
+        # 只在有附件时创建附件目录
         doc_attachments_dir = os.path.join(doc_markdown_dir, "attachments")
-        os.makedirs(doc_markdown_dir, exist_ok=True)
-        if len(attachments) > 0:
+        if attachments:
             os.makedirs(doc_attachments_dir, exist_ok=True)
 
         return doc_markdown_dir, doc_attachments_dir

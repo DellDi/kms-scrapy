@@ -28,7 +28,11 @@ class SpiderConfig(BaseModel):
         "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
     }
-    default_cookies: Dict[str, str] = {"confluence.list.pages.cookie": "list-content-tree"}
+    default_cookies: Dict[str, str] = {
+        "confluence.list.pages.cookie": "list-content-tree",
+        "ajs_user_id": "b855f69db6d93f0a1a50b21008c841d7416fc802",
+        "ajs_anonymous_id": "be8fadfe-3cd8-4b1b-9c20-c467f8b20eae",
+    }
 
 
 class BaichuanConfig(BaseModel):

@@ -220,7 +220,7 @@ class ConfluenceSpider(scrapy.Spider):
                 # 登录成功后直接访问目标URL
                 return Request(
                     url=target_url,
-                    callback=self.parse_content,  # 直接使用parse_content方法处理页面内容
+                    callback=self.parse,  # 直接使用parse方法处理页面内容
                     headers=headers,
                     dont_filter=True,
                     meta={

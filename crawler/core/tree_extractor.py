@@ -112,6 +112,10 @@ class TreeExtractor:
                 "dont_merge_cookies": True,
                 "handle_httpstatus_list": [302, 200],
                 "is_expansion": True,  # 标记这是一个节点展开请求
+                "depth_info": {
+                    "current_depth": response.meta.get("depth_info", {}).get("current_depth", 0),
+                    "ancestor_titles": response.meta.get("depth_info", {}).get("ancestor_titles", []),
+                },
             },
             dont_filter=True,
         )
@@ -138,10 +142,14 @@ class TreeExtractor:
                 if active_node:
                     page_links = active_node.select('a[href*="viewpage.action"]')
 
-            self.logger.info(f"成功获取导航树数据: {len(page_links)}个页面")
-
+            # 获取或更新深度信息
+            depth_info = response.meta.get("depth_info", {})
+            current_depth = depth_info.get("current_depth", 0)
+            # 如果是展开请求，深度加1
+            if response.meta.get("is_expansion"):
+                current_depth += 1
+            self.logger.info(f"成功获取导航树数据: {len(page_links)}个页面，当前深度：{current_depth}")
             # 1. 首先在active_node中处理未展开节点
-            # if not response.meta.get("is_expansion") and active_node:
             if active_node:
                 # 获取必要的参数
                 url_params = parse_qs(original_url.split("?")[-1])
@@ -180,11 +188,21 @@ class TreeExtractor:
                         "depth_info": {
                             "current_depth": current_depth,
                             "ancestor_ids": tree_params.get("ancestors", []),
-                            "ancestor_titles": [
-                                a.get_text(strip=True)
-                                for a in active_node.find_previous_siblings("a")
-                            ],
+                            "ancestor_titles": (
+                                depth_info.get("ancestor_titles", []) + [depth_info.get("current_title")]
+                                if depth_info.get("current_title")
+                                else [a.get_text(strip=True) for a in active_node.find_previous_siblings("a")]
+                            ),
                             "current_title": link.get_text(strip=True),
+                            # 构建输出路径
+                            "output_path": os.path.join(
+                                *(f"{i:02d}-{t}" for i, t in enumerate(
+                                    # 如果有祖先标题和当前标题，则构建完整路径
+                                    (depth_info.get("ancestor_titles", []) + [depth_info.get("current_title")] if depth_info.get("current_title")
+                                     else [a.get_text(strip=True) for a in active_node.find_previous_siblings("a")]) +
+                                     [link.get_text(strip=True)]
+                                ))
+                            )
                         },
                     },
                 )
