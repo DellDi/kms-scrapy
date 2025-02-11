@@ -14,7 +14,7 @@ class TreeExtractor:
         self._get_common_headers = common_headers_callback
 
     def process_tree_container(self, response, soup):
-        """处理页面中的导航树容器"""
+        """处理页面中的导航树容器-第一次展开左侧标准树"""
         tree_container = soup.select_one(".plugin_pagetree")
 
         if not tree_container:
@@ -69,6 +69,12 @@ class TreeExtractor:
                     "original_url": response.url,
                     "dont_merge_cookies": True,
                     "handle_httpstatus_list": [302, 200],
+                    "depth_info": {
+                        "current_depth": 0,
+                        "current_title": "",
+                        "output_path": "",
+                        "_parent_path": "",
+                    },
                 },
                 dont_filter=True,
             )
@@ -104,6 +110,27 @@ class TreeExtractor:
         headers = self._get_common_headers()
         headers.update({"x-requested-with": "XMLHttpRequest"})
 
+        this_depth_info = response.meta.get("depth_info", {})
+        current_depth = this_depth_info.get("current_depth", 0)
+        current_title = this_depth_info.get("current_title", "")
+        output_path = this_depth_info.get("output_path", "")
+        _parent_path = this_depth_info.get("_parent_path", "")
+
+        current_output_path = (
+            # 根节点
+            f"{current_depth:02d}-{current_title}"
+            if current_depth == 0
+            else
+            # 子节点，基于父路径
+            os.path.join(_parent_path, f"{current_depth:02d}-{current_title}")
+            # os.path.join(parent_output_path, f"{current_depth}-{title}")
+        )
+
+        if current_depth == 0:
+            _parent_path = current_output_path
+        else:
+            _parent_path = os.path.join(_parent_path, f"{current_depth:02d}-{current_title}")
+
         return Request(
             url=tree_url,
             callback=self.parse_tree_ajax,
@@ -114,15 +141,12 @@ class TreeExtractor:
                 "handle_httpstatus_list": [302, 200],
                 "is_expansion": True,  # 标记这是一个节点展开请求
                 "depth_info": {
+                    **this_depth_info,
                     # 计算新深度
-                    "current_depth": response.meta.get("depth_info", {}).get("current_depth", -1) + 1,
-                    "current_title": response.meta.get("depth_info", {}).get("current_title", ""),
-                    "ancestor_titles": response.meta.get("depth_info", {}).get("ancestor_titles", []),
-                    # 构建当前输出路径
-                    "output_path": os.path.join(
-                        response.meta.get("depth_info", {}).get("output_path", ""),
-                        f"{(response.meta.get('depth_info', {}).get('current_depth', -1) + 1):02d}-{response.meta.get('depth_info', {}).get('current_title', '')}"
-                    )
+                    "current_depth": current_depth + 1,
+                    "current_title": current_title,
+                    "output_path": current_output_path,
+                    "_parent_path": output_path,
                 },
             },
             dont_filter=True,
@@ -138,42 +162,26 @@ class TreeExtractor:
             original_url = response.meta.get("original_url")
             page_links_all = soup.select('a[href*="viewpage.action"]')
             active_node = None
+
+            # 获取深度信息
+            depth_info = response.meta.get("depth_info", {})
+            current_depth = depth_info.get("current_depth", 0)
+            current_output_path = depth_info.get("output_path", "")
+            parent_output_path = depth_info.get("_parent_path", "")
+
             # 如果是节点展开请求，直接处理返回的链接
             if response.meta.get("is_expansion"):
                 page_links = page_links_all
                 active_node = soup
             else:
-                # 否则按原逻辑查找活动节点
+                # 否则就是相当于第一次查询树完整结构，需要找到当前页面的节点
                 page_id = original_url.split("=")[-1]
                 page_links = [link for link in page_links_all if page_id in link["href"]]
                 active_node = page_links[0].find_parent("li") if page_links else None
                 if active_node:
                     page_links = active_node.select('a[href*="viewpage.action"]')
 
-            # 获取或更新深度信息
-            depth_info = response.meta.get("depth_info", {})
-            current_depth = depth_info.get("current_depth", 0)
-            # 如果是展开请求，深度加1
-            if response.meta.get("is_expansion"):
-                current_depth += 1
-            # 添加详细的深度和路径信息日志
-            self.logger.info("================ 树节点处理信息 ================")
-            self.logger.info(f"页面数量: {len(page_links)}")
-            self.logger.info(f"当前深度: {current_depth}")
-            self.logger.info(f"父节点路径: {depth_info.get('_parent_path', '无')}")
-            self.logger.info(f"父节点标题: {depth_info.get('current_title', '无')}")
-            self.logger.info(f"祖先标题链: {depth_info.get('ancestor_titles', [])}")
-            self.logger.info(f"是否展开请求: {response.meta.get('is_expansion', False)}")
-            self.logger.info(f"父节点深度: {depth_info.get('current_depth', '未知')}")
-            self.logger.info(f"完整路径信息: {depth_info}")
-            self.logger.info("====================== 详细分析 ====================")
-            if response.meta.get("is_expansion"):
-                self.logger.info("展开节点信息:")
-                self.logger.info(f"展开前深度: {depth_info.get('current_depth', '未知')}")
-                self.logger.info(f"展开后深度: {current_depth}")
-                self.logger.info(f"展开前路径: {depth_info.get('output_path', '无')}")
-            self.logger.info("================================================")
-            # 1. 首先在active_node中处理未展开节点
+            #  active_node 有两种情况，一种是全树状节点（第一次），一种是展开的节点
             if active_node:
                 # 获取必要的参数
                 url_params = parse_qs(original_url.split("?")[-1])
@@ -189,56 +197,57 @@ class TreeExtractor:
                         if page_link:
                             # 从URL中提取pageId
                             page_url = page_link["href"]
+                            title = page_link.get_text(strip=True)
+                            current_output_path = (
+                                # 根节点
+                                f"{current_depth:02d}-{title}"
+                                if current_depth == 0
+                                else
+                                # 父级路径等于当前路径
+                                os.path.join(parent_output_path, f"{current_depth:02d}-{title}")
+                            )
+
+                            parent_output_path = (
+                                # 根节点
+                                f"{current_depth:02d}-{title}"
+                                if current_depth == 0
+                                else
+                                # 父级路径等于当前路径
+                                current_output_path
+                                # os.path.join(current_output_path, f"{current_depth:02d}-{title}")
+                            )
+
+                            response.meta.update(
+                                {
+                                    "depth_info": {
+                                        **response.meta.get("depth_info"),
+                                        "current_title": title,
+                                        "output_path": current_output_path,
+                                        "_parent_path": parent_output_path,
+                                    }
+                                }
+                            )
+
                             query_params = parse_qs(page_url.split("?")[-1])
                             if "pageId" in query_params:
                                 page_id = query_params["pageId"][0]
-                                # 创建展开该节点的请求，传递必要参数
                                 yield self._expand_node(response, page_id, tree_params)
 
             # 2. 处理当前层级的所有页面链接
             for link in page_links:
                 page_url = response.urljoin(link["href"])
                 title = link.get_text(strip=True)
-                self.logger.info("================ 页面路径构建信息 ================")
-                self.logger.info(f"页面标题: {title}")
-                self.logger.info(f"页面URL: {page_url}")
-                self.logger.info(f"当前深度: {current_depth}")
-                self.logger.info(f"父节点深度: {depth_info.get('current_depth', '未知')}")
-                self.logger.info(f"父节点路径: {depth_info.get('_parent_path', '无')}")
-                self.logger.info(f"父节点标题: {depth_info.get('current_title', '无')}")
-                self.logger.info(f"祖先标题链: {depth_info.get('ancestor_titles', [])}")
-                self.logger.info("-------------- 路径构建过程 ---------------")
-                # 构建并记录完整路径信息
                 # 构建完整的深度信息
-                parent_output_path = depth_info.get("_parent_path", "")
+                self.logger.info(f"parent_output_path-----> {parent_output_path}")
                 current_output_path = (
                     # 根节点
                     f"{current_depth:02d}-{title}"
-                    if current_depth == 0 else
+                    if current_depth == 0
+                    else
                     # 子节点，基于父路径
-                    # os.path.join(parent_output_path, f"{current_depth:02d}-{title}")
-                    os.path.join(parent_output_path, f"{current_depth}-{title}")
+                    os.path.join(parent_output_path, f"{current_depth:02d}-{title}")
                 )
 
-                new_depth_info = {
-                    "current_depth": current_depth,
-                    "ancestor_ids": tree_params.get("ancestors", []),
-                    "ancestor_titles": (
-                        depth_info.get("ancestor_titles", []) + [depth_info.get("current_title")]
-                        if depth_info and depth_info.get("current_title")
-                        else [a.get_text(strip=True) for a in active_node.find_previous_siblings("a")]
-                    ),
-                    "current_title": title,
-                    # 使用已计算的current_output_path
-                    "output_path": current_output_path,
-                    # 对于下一层来说，当前的output_path就是它们的parent_path
-                    "_parent_path": current_output_path
-                }
-                self.logger.info("-------------- 路径构建结果 ---------------")
-                self.logger.info(f"父路径: {new_depth_info.get('_parent_path', '无')}")
-                self.logger.info(f"当前输出路径: {new_depth_info.get('output_path', '无')}")
-                self.logger.info(f"完整深度信息: {new_depth_info}")
-                self.logger.info("==============================================")
                 headers = self._get_common_headers()
                 yield Request(
                     url=page_url,
@@ -248,7 +257,11 @@ class TreeExtractor:
                     meta={
                         "dont_merge_cookies": True,
                         "handle_httpstatus_list": [302, 200],
-                        "depth_info": new_depth_info,  # 使用提前构建好的完整深度信息
+                        "depth_info": {
+                            **depth_info,
+                            "output_path": current_output_path,
+                            "current_title": title,
+                        },  # 使用提前构建好的完整深度信息
                     },
                 )
 

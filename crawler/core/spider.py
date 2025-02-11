@@ -57,7 +57,6 @@ class ConfluenceSpider(scrapy.Spider):
         if cookies:
             headers["Cookie"] = "; ".join(f"{k}={v}" for k, v in cookies.items())
 
-        self.logger.info(f"_get_common_headers-headers: {headers}")
         return headers
 
     def start_requests(self):
@@ -336,13 +335,7 @@ class ConfluenceSpider(scrapy.Spider):
 
         # 创建KMSItem对象，包含深度信息
         depth_info = response.meta.get("depth_info", {})
-        self.logger.info("========= 创建 KMSItem =========")
-        self.logger.info(f"页面标题: {title}")
-        self.logger.info(f"深度信息: {depth_info}")
-        self.logger.info(f"当前URL: {response.url}")
-        self.logger.info(f"响应Meta信息: {response.meta}")
-        self.logger.info("==============================")
-        
+
         kms_item = KMSItem(
             title=title,
             content=optimized_content,
