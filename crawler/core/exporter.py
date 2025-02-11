@@ -1,5 +1,6 @@
 import os
 import re
+import logging
 from typing import Optional, List, Dict, Any
 from .content import KMSItem
 
@@ -11,6 +12,7 @@ class DocumentExporter:
         self.base_dir = base_dir or os.getcwd()
         self.markdown_dir = os.path.join(self.base_dir, "output", "markdown")
         self.attachments_dir = os.path.join(self.base_dir, "output", "attachments")
+        self.logger = logging.getLogger(__name__)
 
     def _create_dirs(
         self, safe_title: str, attachments: Optional[List[dict]] = [], depth_info: dict = None
@@ -19,11 +21,21 @@ class DocumentExporter:
         if depth_info:
             # 直接使用传入的输出路径
             output_path = depth_info.get("output_path")
+            parent_path = depth_info.get("_parent_path", "")
+            current_depth = depth_info.get("current_depth", 0)
+            
+            self.logger.info(f"创建目录 - 深度: {current_depth}")
+            self.logger.info(f"父路径: {parent_path}")
+            self.logger.info(f"当前输出路径: {output_path}")
+            self.logger.info(f"完整深度信息: {depth_info}")
+            
             if output_path:
                 doc_markdown_dir = os.path.join(self.markdown_dir, output_path)
+                self.logger.info(f"使用输出路径创建目录: {doc_markdown_dir}")
             else:
                 # 如果没有提供输出路径，使用安全的标题
                 doc_markdown_dir = os.path.join(self.markdown_dir, safe_title)
+                self.logger.info(f"使用安全标题创建目录: {doc_markdown_dir}")
             os.makedirs(doc_markdown_dir, exist_ok=True)
         else:
             doc_markdown_dir = os.path.join(self.markdown_dir, safe_title)
@@ -95,7 +107,7 @@ class DocumentExporter:
 
     def export(self, item: KMSItem) -> tuple[str, str]:
         # 提取depth_info
-        depth_info = item.depth_info if item.depth_info else None
+        # depth_info = item.depth_info if item.depth_info else None
         """导出文档为Markdown格式
 
         Args:
