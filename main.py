@@ -29,7 +29,7 @@ def main():
     # 添加爬虫 智慧数据-开始
     process.crawl(
         ConfluenceSpider,
-        start_url="http://kms.new-see.com:8090/pages/viewpage.action?pageId=122356820",
+        start_url="http://kms.new-see.com:8090/pages/viewpage.action?pageId=27363325",
     )
 
     # 启动爬虫

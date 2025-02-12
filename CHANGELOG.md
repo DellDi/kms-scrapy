@@ -1,4 +1,21 @@
-# Changelog### 重构
+# Changelog
+
+## [Unreleased]
+### Added
+- 添加通用OpenAI兼容适配器 @2025-02-12
+  - 创建 OpenAICompatibleAdapter 类支持任意OpenAI接口格式API
+  - 实现 OpenAICompatibleOptimizer 类用于内容优化
+  - 支持自定义URL和model
+  - 默认启用流式响应
+  - 支持多种响应格式的自动转换
+  - 扩展 OptimizerFactory 支持创建兼容适配器实例
+- 添加讯飞星火API的流式响应适配器 @2025-02-12
+  - 创建 StreamingResponseAdapter 类将讯飞响应转换为OpenAI格式
+  - 扩展 optimize 方法支持流式响应选项
+  - 在 XunfeiOptimizer 中实现流式响应处理
+  - 更新类型注解以支持新的流式响应功能
+
+### 重构
 - 重构树结构提取相关代码 @2025-02-07
   - 创建 TreeExtractor 类专门处理导航树解析逻辑
   - 从 ConfluenceSpider 类中分离树结构处理代码
@@ -15,7 +32,8 @@
 - 修复导航树节点递归处理问题 @2025-02-07
   - 添加缺失的必要参数（startDepth，mobile，treePageId）
   - 限制未展开节点处理在active_node范围内
-  - 优化参数传递机制，确保递归处理正确性## [Unreleased]
+  - 优化参数传递机制，确保递归处理正确性
+
 ### Fix
 - 优化树节点提取器(TreeExtractor)的选择范围，限制为仅获取active节点下第一层级的未展开节点 @2025-02-08
 - 优化内容优化器的提示信息，调整树提取器的参数处理逻辑 @2025-02-10
