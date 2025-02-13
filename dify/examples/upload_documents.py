@@ -5,19 +5,25 @@ import os
 from typing import Dict, List
 import json
 from pathlib import Path
+from dotenv import load_dotenv
 
 from dify import DifyClient, DatasetManager
+
+# 加载环境变量
+load_dotenv()
 
 def upload_to_dify():
     """上传文档到 Dify 数据集"""
 
-    # 获取 API 密钥
+    # 获取配置
     api_key = os.getenv('DIFY_API_KEY')
+    base_url = os.getenv('DIFY_BASE_URL', 'https://api.dify.ai/v1')
+    
     if not api_key:
         raise ValueError("请设置 DIFY_API_KEY 环境变量")
 
     # 初始化 Dify 客户端
-    client = DifyClient(api_key)
+    client = DifyClient(api_key, base_url)
 
     # documents
     dataset_manager = DatasetManager(client)

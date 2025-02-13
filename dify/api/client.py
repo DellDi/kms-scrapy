@@ -43,7 +43,9 @@ class DifyClient:
         Returns:
             Dict: API 响应数据
         """
-        url = urljoin(self.base_url, endpoint)
+        # 确保 endpoint 不以斜杠开头，避免 urljoin 移除 base_url 的路径部分
+        endpoint = endpoint.lstrip('/')
+        url = urljoin(self.base_url + '/', endpoint)
         try:
             response = self.session.request(method, url, **kwargs)
             response.raise_for_status()
