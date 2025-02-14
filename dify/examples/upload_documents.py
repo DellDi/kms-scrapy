@@ -9,16 +9,26 @@ from dotenv import load_dotenv
 
 from dify import DifyClient, DatasetManager
 
-# 加载环境变量
-load_dotenv()
+# 加载环境变量（强制重新加载）
+load_dotenv(override=True)
 
 def upload_to_dify():
     """上传文档到 Dify 数据集"""
 
-    # 获取配置
-    api_key = os.getenv('DIFY_API_KEY')
-    base_url = os.getenv('DIFY_BASE_URL', 'https://api.dify.ai/v1')
-    
+    def clean_env_value(value: str) -> str:
+        """清理环境变量值（移除注释和空格）"""
+        if value and '#' in value:
+            value = value.split('#')[0]
+        return value.strip() if value else ''
+
+    # 获取并清理配置
+    api_key = clean_env_value(os.getenv('DIFY_API_KEY', ''))
+    base_url = clean_env_value(os.getenv("DIFY_BASE_URL", "https://api.dify.ai/v1"))
+
+    print("\n使用的 API 配置:")
+    print(f"Base URL: {base_url}")
+    print(f"API Key: {'*' * 20}{api_key[-4:]}")
+
     if not api_key:
         raise ValueError("请设置 DIFY_API_KEY 环境变量")
 
@@ -29,8 +39,9 @@ def upload_to_dify():
     dataset_manager = DatasetManager(client)
 
     # 初始化或获取当前数据集
+    print("\n初始化数据集...")
     current_dataset = dataset_manager.initialize()
-    print(f"当前使用数据集: {current_dataset['name']}")
+    print(f"当前使用数据集: {current_dataset['name'] if current_dataset else '新建中'}")
 
     # 示例：读取 output 目录中的内容并上传
     def process_output_directory() -> None:
@@ -40,47 +51,37 @@ def upload_to_dify():
         if not output_dir.exists():
             raise ValueError(f"output 目录不存在: {output_dir}")
 
-        # 收集所有要上传的文档
-        documents_to_upload = []
+        # 收集所有要上传的文件
+        files_to_upload = []
 
         # 遍历目录
         for file_path in output_dir.rglob('*'):
             if file_path.is_file():
                 try:
-                    # 如果是 JSON 文件
-                    if file_path.suffix == '.json':
-                        with open(file_path, 'r', encoding='utf-8') as f:
-                            content = json.load(f)
-                            # 假设 JSON 文件包含文本内容
-                            if isinstance(content, dict) and 'text' in content:
-                                documents_to_upload.append({
-                                    'content': content['text'],
-                                    'name': file_path.name
-                                })
-
-                    # 如果是 Markdown 或其他文本文件
-                    elif file_path.suffix in ['.md', '.txt']:
-                        with open(file_path, 'r', encoding='utf-8') as f:
-                            content = f.read()
-                            documents_to_upload.append({
-                                'content': content,
-                                'name': file_path.name
-                            })
+                    # 收集支持的文件
+                    if file_path.suffix in ['.md', '.txt', '.json']:
+                        files_to_upload.append(str(file_path))
+                        print(f"添加待上传文件: {file_path.name}")
+                    else:
+                        print(f"跳过不支持的文件类型: {file_path}")
 
                 except Exception as e:
                     print(f"处理文件 {file_path} 失败: {str(e)}")
+                    print(f"错误类型: {type(e)}")
                     continue
 
-        # 批量上传文档
-        if documents_to_upload:
-            print(f"\n开始批量上传 {len(documents_to_upload)} 个文档...")
-            results = dataset_manager.batch_create_documents(
-                documents_to_upload,
-                indexing_technique="high_quality"
+        # 上传文件
+        if files_to_upload:
+            print(f"\n开始上传 {len(files_to_upload)} 个文件...")
+            results = dataset_manager.upload_files(
+                files_to_upload,
+                indexing_technique="high_quality",
+                process_rule="custom"
             )
-            print(f"成功上传 {len(results)} 个文档")
+            successful_uploads = len([r for r in results if r is not None])
+            print(f"成功上传 {successful_uploads} 个文件")
         else:
-            print("没有找到可上传的文档")
+            print("没有找到可上传的文件")
 
         # 获取当前数据集状态
         docs_response = client.list_documents(current_dataset["id"])
@@ -95,6 +96,18 @@ def upload_to_dify():
 
 if __name__ == "__main__":
     try:
+        # 检查环境变量
+        api_key = os.getenv('DIFY_API_KEY')
+        base_url = os.getenv('DIFY_BASE_URL')
+        print(f"配置信息:")
+        print(f"- API URL: {base_url}")
+        print(f"- API Key: {'已设置' if api_key else '未设置'}")
+        
         upload_to_dify()
     except Exception as e:
-        print(f"错误: {str(e)}")
+        error_msg = str(e)
+        print(f"错误: {error_msg}")
+        if isinstance(e, ValueError):
+            print("\n提示: 请确保在 .env 文件中设置了必要的环境变量:")
+            print("DIFY_API_KEY=your_api_key")
+            print("DIFY_BASE_URL=https://api.dify.ai/v1")

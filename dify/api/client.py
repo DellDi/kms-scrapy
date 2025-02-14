@@ -5,6 +5,7 @@ Dify API 客户端实现
 """
 import os
 from typing import Dict, List, Optional, Union, Any
+import os
 import requests
 from urllib.parse import urljoin
 
@@ -15,7 +16,7 @@ class DifyAPIError(Exception):
 class DifyClient:
     """Dify API 客户端"""
 
-    def __init__(self, api_key: str, base_url: str = "https://api.dify.ai/v1"):
+    def __init__(self, api_key: str, base_url: str = "https://cloud.dify.ai/console/api"):
         """
         初始化 Dify 客户端
 
@@ -25,10 +26,18 @@ class DifyClient:
         """
         self.api_key = api_key
         self.base_url = base_url.rstrip('/')
+        if '#' in self.base_url:  # 移除注释
+            self.base_url = self.base_url.split('#')[0].strip()
+            
+        print(f"\nDifyClient 初始化:")
+        print(f"Base URL: {self.base_url}")
+        print(f"API Key: {'*' * 20}{api_key[-4:]}")
+        
         self.session = requests.Session()
         self.session.headers.update({
             "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json;charset=utf-8",
+            "Accept": "application/json"
         })
 
     def _make_request(self, method: str, endpoint: str, **kwargs) -> Dict:
@@ -46,12 +55,39 @@ class DifyClient:
         # 确保 endpoint 不以斜杠开头，避免 urljoin 移除 base_url 的路径部分
         endpoint = endpoint.lstrip('/')
         url = urljoin(self.base_url + '/', endpoint)
+        print(f"\n处理url: {url}")
+        # 添加编码处理
+        if 'json' in kwargs:
+            try:
+                # 确保所有 JSON 数据都是 UTF-8 编码
+                import json
+                kwargs['data'] = json.dumps(kwargs.pop('json'), ensure_ascii=False).encode('utf-8')
+                kwargs['headers'] = {
+                    **kwargs.get('headers', {}),
+                    'Content-Type': 'application/json; charset=utf-8'
+                }
+            except Exception as e:
+                raise DifyAPIError(f"JSON 编码失败: {str(e)}") from e
+
         try:
             response = self.session.request(method, url, **kwargs)
+            response.encoding = 'utf-8'  # 确保响应使用 UTF-8 编码
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
-            raise DifyAPIError(f"API 请求失败: {str(e)}") from e
+            error_msg = "API 请求失败"
+            try:
+                if hasattr(e.response, 'content'):
+                    # 尝试解码错误响应
+                    error_content = e.response.content.decode('utf-8')
+                    try:
+                        error_detail = json.loads(error_content)
+                        error_msg = f"{error_msg}: {json.dumps(error_detail, ensure_ascii=False)}"
+                    except:
+                        error_msg = f"{error_msg}: {error_content}"
+            except:
+                error_msg = f"{error_msg}: {str(e)}"
+            raise DifyAPIError(error_msg) from e
 
     def create_dataset(self, name: str, description: str = "") -> Dict:
         """
@@ -159,38 +195,75 @@ class DifyClient:
             json=data
         )
 
-    def batch_create_documents(
+    def upload_file(
         self,
         dataset_id: str,
-        documents: List[Dict[str, Any]],
-        indexing_technique: str = "high_quality"
+        file_path: str,
+        indexing_technique: str = "high_quality",
+        process_rule: str = "custom"
     ) -> Dict:
         """
-        批量创建文档
+        上传文件作为文档
 
         Args:
             dataset_id: 数据集 ID
-            documents: 文档列表
+            file_path: 本地文件路径
             indexing_technique: 索引技术，'high_quality' 或 'economy'
+            process_rule: 处理规则，'custom' 或 'advanced'
 
         Returns:
-            Dict: 创建结果
-
-        文档：https://docs.dify.ai/zh-hans/guides/knowledge-base/knowledge-and-documents-maintenance/maintain-dataset-via-api#%E6%89%B9%E9%87%8F%E5%88%9B%E5%BB%BA%E6%96%87%E6%A1%A3
+            Dict: 上传结果
         """
         if indexing_technique not in ['high_quality', 'economy']:
             raise ValueError("indexing_technique must be either 'high_quality' or 'economy'")
+        
+        if process_rule not in ['custom', 'advanced']:
+            raise ValueError("process_rule must be either 'custom' or 'advanced'")
 
-        data = {
-            "indexing_technique": indexing_technique,
-            "documents": documents
-        }
+        with open(file_path, 'rb') as f:
+            files = {
+                'file': (os.path.basename(file_path), f, 'application/octet-stream')
+            }
+            data = {
+                'indexing_technique': indexing_technique,
+                'process_rule': process_rule
+            }
+            
+            return self._make_request(
+                "POST",
+                f"/datasets/{dataset_id}/documents/upload",
+                data=data,
+                files=files
+            )
 
-        return self._make_request(
-            "POST",
-            f"/datasets/{dataset_id}/documents/batch",
-            json=data
-        )
+    def upload_multiple_files(
+        self,
+        dataset_id: str,
+        file_paths: List[str],
+        indexing_technique: str = "high_quality",
+        process_rule: str = "custom"
+    ) -> List[Dict]:
+        """
+        批量上传多个文件作为文档
+
+        Args:
+            dataset_id: 数据集 ID
+            file_paths: 本地文件路径列表
+            indexing_technique: 索引技术，'high_quality' 或 'economy'
+            process_rule: 处理规则，'custom' 或 'advanced'
+
+        Returns:
+            List[Dict]: 每个文件的上传结果
+        """
+        results = []
+        for file_path in file_paths:
+            try:
+                result = self.upload_file(dataset_id, file_path, indexing_technique, process_rule)
+                results.append(result)
+                print(f"成功上传文件: {os.path.basename(file_path)}")
+            except Exception as e:
+                print(f"上传文件失败 {os.path.basename(file_path)}: {str(e)}")
+        return results
 
     def get_document(self, dataset_id: str, document_id: str) -> Dict:
         """
@@ -260,26 +333,5 @@ class DifyClient:
         return self._make_request(
             "DELETE",
             f"/datasets/{dataset_id}/documents/{document_id}"
-        )
-
-    def delete_documents(self, dataset_id: str, document_ids: List[str]) -> Dict:
-        """
-        批量删除文档
-
-        Args:
-            dataset_id: 数据集 ID
-            document_ids: 文档 ID 列表
-
-        Returns:
-            Dict: 删除结果
-
-        文档：https://docs.dify.ai/zh-hans/guides/knowledge-base/knowledge-and-documents-maintenance/maintain-dataset-via-api#%E6%89%B9%E9%87%8F%E5%88%A0%E9%99%A4%E6%96%87%E6%A1%A3
-        """
-        data = {
-            "document_ids": document_ids
-        }
-        return self._make_request(
-            "DELETE",
-            f"/datasets/{dataset_id}/documents/batch",
-            json=data
-        )
+        )    
+       

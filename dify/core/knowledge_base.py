@@ -2,6 +2,7 @@
 知识库管理模块
 负责知识库（数据集）的创建和管理
 """
+import os
 import re
 from typing import Dict, List, Optional, Any
 from ..api.client import DifyClient, DifyAPIError
@@ -31,29 +32,44 @@ class DatasetManager:
             Dict: 当前使用的数据集信息
         """
         try:
+            print("开始获取数据集列表...")
             # 获取数据集列表
             response = self.client.list_datasets()
             datasets = response.get('data', [])
+            print(f"找到 {len(datasets)} 个数据集")
 
             if not datasets:
+                print("没有找到数据集，创建第一个...")
                 # 没有数据集，创建第一个
                 self._dataset_number = 1
                 self._current_dataset = self._create_dataset()
+                print(f"已创建新数据集: {self._current_dataset['name']}")
             else:
+                print("处理现有数据集...")
                 # 找到最新的数据集
                 latest_dataset, number = self._get_latest_dataset(datasets)
                 self._dataset_number = number
 
-                # 获取最新数据集的文档列表
-                docs_response = self.client.list_documents(latest_dataset["id"])
-                doc_count = docs_response.get('total', 0)
+                if latest_dataset:
+                    print(f"找到最新数据集: {latest_dataset['name']}")
+                    # 获取最新数据集的文档列表
+                    docs_response = self.client.list_documents(latest_dataset["id"])
+                    doc_count = docs_response.get('total', 0)
+                    print(f"当前数据集文档数量: {doc_count}/{self.max_docs}")
 
-                if doc_count >= self.max_docs:
-                    # 创建新数据集
-                    self._dataset_number += 1
-                    self._current_dataset = self._create_dataset()
+                    if doc_count >= self.max_docs:
+                        print("数据集已满，创建新数据集...")
+                        # 创建新数据集
+                        self._dataset_number += 1
+                        self._current_dataset = self._create_dataset()
+                        print(f"已创建新数据集: {self._current_dataset['name']}")
+                    else:
+                        self._current_dataset = latest_dataset
                 else:
-                    self._current_dataset = latest_dataset
+                    print("没有找到有效数据集，创建新数据集...")
+                    self._dataset_number = 1
+                    self._current_dataset = self._create_dataset()
+                    print(f"已创建新数据集: {self._current_dataset['name']}")
 
             return self._current_dataset
 
@@ -83,7 +99,8 @@ class DatasetManager:
                     latest_dataset = dataset
 
         if not latest_dataset:
-            raise ValueError("没有找到有效的数据集")
+            # 如果没有找到任何数据集，返回 None 和 0
+            return None, 0
 
         return latest_dataset, max_number
 
@@ -154,69 +171,49 @@ class DatasetManager:
             indexing_technique=indexing_technique
         )
 
-    def batch_create_documents(
+    def upload_files(
         self,
-        documents: List[Dict[str, Any]],
-        indexing_technique: str = "high_quality"
+        file_paths: List[str],
+        indexing_technique: str = "high_quality",
+        process_rule: str = "custom"
     ) -> List[Dict]:
         """
-        批量创建文档，自动处理数据集容量
+        上传文件，自动处理数据集容量
 
         Args:
-            documents: 文档列表，每个文档必须包含 content 字段
+            file_paths: 文件路径列表
             indexing_technique: 索引技术，'high_quality' 或 'economy'
+            process_rule: 处理规则，'custom' 或 'advanced'
 
         Returns:
-            List[Dict]: 创建的文档信息列表
+            List[Dict]: 上传的文档信息列表
         """
         results = []
-        current_batch = []
 
-        for doc in documents:
-            if not isinstance(doc, dict) or 'content' not in doc:
-                raise ValueError("每个文档必须是字典类型且包含 'content' 字段")
-
+        for file_path in file_paths:
             # 获取当前数据集状态
             current_dataset = self.get_current_dataset()
             docs_response = self.client.list_documents(current_dataset["id"])
             doc_count = docs_response.get('total', 0)
 
             # 检查是否需要新建数据集
-            if doc_count + len(current_batch) >= self.max_docs:
-                # 上传当前批次
-                if current_batch:
-                    result = self.client.batch_create_documents(
-                        current_dataset["id"],
-                        current_batch,
-                        indexing_technique
-                    )
-                    results.extend(result.get('data', []))
-                    current_batch = []
-
+            if doc_count >= self.max_docs:
                 # 创建新数据集
                 self._dataset_number += 1
                 self._current_dataset = self._create_dataset()
+                print(f"创建新数据集: {self._current_dataset['name']}")
 
-            # 添加到当前批次
-            current_batch.append(doc)
-
-            # 如果批次达到一定大小，就上传
-            if len(current_batch) >= 50:  # 假设每批50个文档
-                result = self.client.batch_create_documents(
+            try:
+                # 上传文件
+                result = self.client.upload_file(
                     self._current_dataset["id"],
-                    current_batch,
-                    indexing_technique
+                    file_path,
+                    indexing_technique,
+                    process_rule
                 )
-                results.extend(result.get('data', []))
-                current_batch = []
-
-        # 上传剩余的文档
-        if current_batch:
-            result = self.client.batch_create_documents(
-                self._current_dataset["id"],
-                current_batch,
-                indexing_technique
-            )
-            results.extend(result.get('data', []))
+                results.append(result)
+                print(f"成功上传文件: {os.path.basename(file_path)}")
+            except Exception as e:
+                print(f"上传文件失败 {os.path.basename(file_path)}: {str(e)}")
 
         return results
