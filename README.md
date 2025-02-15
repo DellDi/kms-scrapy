@@ -1,24 +1,36 @@
 # KMS 文档爬虫系统
 
-一个基于 Scrapy 的 Confluence KMS 系统爬虫项目，具有强大的文档处理和内容优化功能。
+一个基于 Scrapy 的 Confluence KMS 系统爬虫项目，具有强大的文档处理和内容优化功能。同时支持Jira系统的问题数据抓取，以及Dify知识库的数据集成。
 
 ## 功能特性
 
-- 🔐 支持 Confluence 系统的自动登录认证
+- 🔐 支持多系统认证
+  - Confluence 系统的自动登录认证
+  - Jira 系统的 Basic 认证和 Cookie 管理
+  - Dify API的密钥认证
 - 📑 自动抓取文档内容和结构
   - 智能提取文档标题和正文
   - 保持文档层级关系
   - 支持批量文档爬取
+  - 支持 Jira 问题列表和详情抓取
 - 📎 智能处理多种附件格式：
   - 图片 OCR 文字识别
   - PDF 文档文本提取
   - Word 文档内容解析
   - PowerPoint 演示文稿内容提取
-- 🤖 集成百川 AI 进行内容优化
-  - 文本内容智能总结
-  - 关键信息提取
-  - 文档结构优化
-- 💾 结构化数据输出（JSON 格式）
+- 🤖 AI增强功能
+  - 集成百川 AI 进行内容优化
+    - 文本内容智能总结
+    - 关键信息提取
+    - 文档结构优化
+  - 集成 Dify 知识库
+    - 自动创建知识库
+    - 批量上传文档
+    - 知识库检索和问答
+- 💾 结构化数据输出
+  - Confluence文档输出（JSON 格式）
+  - Jira问题导出（Markdown 格式）
+  - Dify知识库同步
 
 ## 环境要求
 
@@ -38,7 +50,14 @@
     - 用于文件类型检测
     - macOS: `brew install libmagic`
     - Ubuntu: `sudo apt-get install libmagic1`
-    - Windows: 包含在 Windows 版 Python 包中
+    - Windows: 需要预先安装 Visual C++ Build Tools，然后通过 pip 安装 pylibmagic
+      ```bash
+      # 安装 Visual C++ Build Tools
+      # 1. 下载 Visual Studio Build Tools: https://visualstudio.microsoft.com/visual-cpp-build-tools/
+      # 2. 运行安装程序，选择"Desktop development with C++"
+      # 3. 安装完成后再安装 pylibmagic
+      pip install pylibmagic
+      ```
 
 ## 安装
 
@@ -76,10 +95,15 @@ pip install -r requirements.txt
 
 ```bash
 cp .env.template .env
-# 编辑 .env 文件，填入必要的配置信息
+# 编辑 .env 文件，填入必要的配置信息，包括：
+# - Confluence认证信息
+# - Jira认证信息
+# - Dify API密钥
 ```
 
 ## 使用方法
+
+### Confluence 爬虫
 
 1. 配置爬虫参数：
 
@@ -100,10 +124,52 @@ python main.py
 
 爬取的数据将保存在 `output` 目录下的 JSON 文件中。
 
+### Jira 爬虫
+
+1. 运行爬虫：
+
+```bash
+python jira/main.py
+```
+
+爬取的数据将保存在 `output-jira` 目录下，按页码组织的Markdown文件：
+
+```
+output-jira/
+├── page1/
+│   ├── PMS-123.md  # 使用问题Key作为文件名
+│   └── V10-456.md
+└── page2/
+    ├── PMS-124.md
+    └── V10-457.md
+```
+
+### Dify 集成
+
+1. 配置 Dify API：
+
+在 `.env` 文件中设置 Dify API密钥和端点：
+
+```env
+DIFY_API_KEY=your-api-key
+DIFY_API_ENDPOINT=https://your-dify-instance/v1
+```
+
+2. 上传文档到知识库：
+
+```bash
+python dify/examples/upload_documents.py
+```
+
+这将：
+- 自动创建知识库（如果不存在）
+- 批量上传处理后的文档
+- 支持文档更新和版本管理
+
 ## 项目结构
 
 ```
-├── crawler/
+├── crawler/          # Confluence爬虫模块
 │   ├── core/           # 爬虫核心逻辑
 │   │   ├── auth.py     # 认证和会话管理
 │   │   ├── config.py   # 配置管理模块
@@ -112,15 +178,29 @@ python main.py
 │   │   ├── optimizer.py # AI 内容优化
 │   │   └── spider.py   # 爬虫主程序
 │   └── test/           # 测试用例
-├── output/             # 输出文件目录
+├── jira/            # Jira爬虫模块
+│   ├── core/          # 核心实现
+│   │   ├── auth.py    # 认证管理
+│   │   ├── config.py  # 配置管理
+│   │   ├── spider.py  # 爬虫实现
+│   │   └── exporter.py # 导出功能
+│   └── main.py      # Jira爬虫入口
+├── dify/            # Dify集成模块
+│   ├── api/          # API客户端
+│   ├── core/         # 核心功能
+│   │   └── knowledge_base.py # 知识库管理
+│   ├── examples/     # 使用示例
+│   └── utils/        # 工具函数
+├── output/          # Confluence输出目录
 │   ├── docs/          # Markdown 文档
 │   └── attachments/   # 附件文件
-├── .env               # 环境变量配置
-├── .env.template      # 环境变量模板
-├── main.py           # 程序入口
-├── pyproject.toml    # 项目配置和依赖
-├── requirements.txt  # 依赖清单
-└── uv.lock          # UV 锁定文件
+├── output-jira/     # Jira输出目录
+├── .env            # 环境变量配置
+├── .env.template   # 环境变量模板
+├── main.py        # Confluence爬虫入口
+├── pyproject.toml # 项目配置和依赖
+├── requirements.txt # 依赖清单
+└── uv.lock       # UV 锁定文件
 ```
 
 ## 开发

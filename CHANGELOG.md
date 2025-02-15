@@ -1,22 +1,16 @@
-# Changelog
-
 ## [Unreleased]
-### Added
-- 添加通用OpenAI兼容适配器 @2025-02-12
-  - 创建 OpenAICompatibleAdapter 类支持任意OpenAI接口格式API
-  - 实现 OpenAICompatibleOptimizer 类用于内容优化
-  - 支持自定义URL和model
-  - 默认启用流式响应
-  - 支持多种响应格式的自动转换
-  - 扩展 OptimizerFactory 支持创建兼容适配器实例
-- 添加讯飞星火API的流式响应适配器 @2025-02-12
-  - 创建 StreamingResponseAdapter 类将讯飞响应转换为OpenAI格式
-  - 扩展 optimize 方法支持流式响应选项
-  - 在 XunfeiOptimizer 中实现流式响应处理
-  - 更新类型注解以支持新的流式响应功能
 
-### 重构
-- 重构树结构提取相关代码 @2025-02-07
+### Added
+- 新增Jira爬虫模块 @2025-02-15
+  * 实现Jira系统数据抓取功能
+  * 支持问题列表和详情页处理
+  * 集成现有文本优化功能
+  * 实现分页导出为Markdown格式
+
+## [1.0.0] - 2025-02-14
+* 完成用户登录核心功能
+* 优化数据统计模块性能
+* 修复注册页面的小 bug
   - 创建 TreeExtractor 类专门处理导航树解析逻辑
   - 从 ConfluenceSpider 类中分离树结构处理代码
   - 改善代码组织结构，提高可维护性
