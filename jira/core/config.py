@@ -18,28 +18,37 @@ class SpiderConfig:
     retry_http_codes: List[int] = field(default_factory=lambda: [500, 502, 503, 504, 400])
 
     # 默认请求头
-    default_headers: Dict[str, str] = field(default_factory=lambda: {
-        "Accept": "*/*",
-        "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-        "X-Atlassian-Token": "no-check",
-        "X-Requested-With": "XMLHttpRequest",
-        "__amdModuleName": "jira/issue/utils/xsrf-token-header",
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/133.0.0.0 Safari/537.36 Edg/133.0.0.0"
-        )
-    })
+    default_headers: Dict[str, str] = field(
+        default_factory=lambda: {
+            "Accept": "*/*",
+            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6",
+            "Connection": "keep-alive",
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "Origin": "http://bug.new-see.com:8088",
+            "Proxy-Connection": "keep-alive",
+            "Referer": "http://bug.new-see.com:8088/issues/?filter=37131",
+            "Host": "bug.new-see.com:8088",
+            "X-Atlassian-Token": "no-check",
+            "X-Requested-With": "XMLHttpRequest",
+            "__amdModuleName": "jira/issue/utils/xsrf-token-header",
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/133.0.0.0 Safari/537.36 Edg/133.0.0.0"
+            ),
+        }
+    )
 
-    # 默认Cookie
-    default_cookies: Dict[str, str] = field(default_factory=lambda: {
-        "JSESSIONID": "",
-        "seraph.rememberme.cookie": "",
-        "atlassian.xsrf.token": "",
-        "ajs_user_id": "",
-        "ajs_anonymous_id": ""
-    })
+    # 默认Cookie模板 (这些值将在登录时动态更新)
+    default_cookies: Dict[str, str] = field(
+        default_factory=lambda: {
+            "JSESSIONID": "5E93D3643B4667234AC45461FDC72F55",
+            "seraph.rememberme.cookie": "78463:f925c1d670cb96d32318bf80578fc8725611f85d",
+            "atlassian.xsrf.token": "AYXN-UMWG-3K4D-ZXVN_66e84ca2436dff724ba69706b6b390a06c039534_lin",
+            "ajs_user_id": "b855f69db6d93f0a1a50b21008c841d7416fc802",
+            "ajs_anonymous_id": "5a3663bd-29d6-4df5-abc0-a5bb2358e422"
+        }
+    )
 
 @dataclass
 class OptimizerConfig:

@@ -1,17 +1,21 @@
 import logging
-from typing import Dict, Optional, Generator, Any
+from typing import Dict, Optional, Generator, Any, Union
+import json
 import requests
 from bs4 import BeautifulSoup
 from dataclasses import dataclass
 from datetime import datetime
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlencode
 
 from .auth import AuthManager, AuthError
 from .config import config
 from crawler.core.optimizer import OptimizerFactory
 
 # 配置日志
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 @dataclass
@@ -68,14 +72,33 @@ class JiraSpider:
             requests.RequestException: 请求失败
         """
         try:
+            # 创建请求
+            data_str = urlencode(data) if data else None
             request = self.auth_manager.create_authenticated_request(
                 url=url,
                 method=method,
-                data=data,
+                data=data_str,
                 **kwargs
             )
+
+            # 准备请求
             prepped = self.session.prepare_request(request)
+
+            # 添加日志
+            logger.debug(f"Making request to {url}")
+            logger.debug(f"Method: {method}")
+            logger.debug(f"Headers: {json.dumps(dict(prepped.headers), indent=2)}")
+            if data:
+                logger.debug(f"Data: {json.dumps(data, indent=2)}")
+
+            # 发送请求
             response = self.session.send(prepped)
+
+            # 记录响应信息
+            logger.debug(f"Response Status: {response.status_code}")
+            logger.debug(f"Response Headers: {json.dumps(dict(response.headers), indent=2)}")
+            if response.status_code != 200:
+                logger.error(f"Response Content: {response.text}")
 
             # 检查是否需要认证
             if response.status_code == 401 and retry_count < config.spider.retry_times:
@@ -137,13 +160,46 @@ class JiraSpider:
                 "created >= 2024-01-01 AND "
                 "resolved <= 2025-01-01 "
                 "ORDER BY created ASC"
-            )
+            ),
+            "layoutKey": "list-view"
         }
 
-        response = self._make_request(url=url, method="POST", data=data)
-        result = response.json()
+        # 发送请求
+        response = self._make_request(
+            url=url,
+            method="POST",
+            data=data,
+            headers={
+                "Origin": config.spider.base_url,
+                "Referer": f"{config.spider.base_url}/issues/?filter=37131"
+            }
+        )
 
-        return result.get("issueTable", ""), result.get("pagination", {})
+        # 解析响应
+        try:
+            result = response.json()
+            if not isinstance(result, dict):
+                logger.error("Unexpected response format")
+                logger.debug(f"Response content: {response.text}")
+                raise ParseError("Response is not a JSON object")
+
+            issue_table = result.get("issueTable", "")
+            pagination = result.get("pagination", {})
+
+            if not issue_table:
+                logger.warning("Empty issue table in response")
+                logger.debug(f"Full response: {json.dumps(result, indent=2)}")
+
+            return issue_table, pagination
+
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON解析失败: {str(e)}")
+            logger.debug(f"Response content: {response.text[:1000]}...")
+            raise ParseError("解析问题列表响应失败") from e
+        except Exception as e:
+            logger.error(f"解析响应失败: {str(e)}")
+            logger.debug(f"Response content: {response.text[:1000]}...")
+            raise ParseError("解析问题列表响应失败") from e
 
     def parse_issue_table(self, html: str) -> Generator[str, None, None]:
         """
@@ -155,15 +211,33 @@ class JiraSpider:
         Yields:
             str: 问题详情页URL
         """
-        soup = BeautifulSoup(html, "html.parser")
+        if not html:
+            logger.warning("空的HTML内容")
+            return
 
-        # 查找所有问题链接
-        for row in soup.select("tr"):
-            issue_key_cell = row.select_one("td.issuekey")
-            if issue_key_cell:
-                issue_link = issue_key_cell.select_one("a")
-                if issue_link and issue_link.get("href"):
-                    yield urljoin(config.spider.base_url, issue_link["href"])
+        try:
+            soup = BeautifulSoup(html, "html.parser")
+            logger.debug(f"解析HTML内容: {len(html)} 字符")
+
+            rows = soup.select("tr")
+            if not rows:
+                logger.warning("未找到表格行")
+                logger.debug(f"HTML内容: {html[:500]}...")
+                return
+
+            for row in rows:
+                issue_key_cell = row.select_one("td.issuekey")
+                if issue_key_cell:
+                    issue_link = issue_key_cell.select_one("a")
+                    if issue_link and issue_link.get("href"):
+                        url = urljoin(config.spider.base_url, issue_link["href"])
+                        logger.debug(f"找到问题链接: {url}")
+                        yield url
+
+        except Exception as e:
+            logger.error(f"解析问题表格失败: {str(e)}")
+            logger.debug(f"HTML内容: {html[:500]}...")
+            raise ParseError("解析问题表格失败") from e
 
     def get_issue_detail(self, url: str) -> JiraIssue:
         """
@@ -175,10 +249,15 @@ class JiraSpider:
         Returns:
             JiraIssue: 问题数据对象
         """
-        response = self._make_request(url)
-        soup = BeautifulSoup(response.text, "html.parser")
+        # 发送请求
+        response = self._make_request(
+            url=url,
+            headers={"Referer": f"{config.spider.base_url}/issues/?filter=37131"}
+        )
 
         try:
+            soup = BeautifulSoup(response.text, "html.parser")
+
             # 提取问题信息
             key = soup.select_one("#key-val").text.strip()
             id_elem = soup.select_one("#issue_id_a")
@@ -212,7 +291,9 @@ class JiraSpider:
             )
 
         except (AttributeError, KeyError) as e:
-            raise ParseError(f"解析问题详情失败: {str(e)}")
+            logger.error(f"解析问题详情失败: {str(e)}")
+            logger.debug(f"Response content: {response.text[:1000]}...")
+            raise ParseError(f"解析问题详情失败: {str(e)}") from e
 
     def crawl(self) -> Generator[JiraIssue, None, None]:
         """
@@ -226,11 +307,13 @@ class JiraSpider:
         while True:
             try:
                 # 获取问题列表
+                logger.info(f"获取问题列表，起始索引: {start_index}")
                 issue_table, pagination = self.get_issue_table(start_index)
 
                 # 解析问题链接
                 for issue_url in self.parse_issue_table(issue_table):
                     try:
+                        logger.info(f"处理问题: {issue_url}")
                         # 获取问题详情
                         issue = self.get_issue_detail(issue_url)
                         yield issue
@@ -240,10 +323,12 @@ class JiraSpider:
 
                 # 检查是否还有下一页
                 if not pagination.get("next"):
+                    logger.info("已到达最后一页")
                     break
 
                 # 更新起始索引
                 start_index = pagination.get("start", 0) + pagination.get("max", 50)
+                logger.info(f"处理下一页，新的起始索引: {start_index}")
 
             except Exception as e:
                 logger.error(f"处理问题列表失败: {str(e)}")

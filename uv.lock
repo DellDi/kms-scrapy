@@ -1,4 +1,5 @@
 version = 1
+revision = 1
 requires-python = ">=3.11"
 
 [[package]]
@@ -408,11 +409,11 @@ dependencies = [
     { name = "pillow" },
     { name = "playwright" },
     { name = "pydantic" },
-    { name = "pylibmagic" },
     { name = "pytesseract" },
     { name = "python-docx" },
     { name = "python-dotenv" },
     { name = "python-magic" },
+    { name = "python-magic-bin" },
     { name = "python-pptx" },
     { name = "requests" },
     { name = "scrapy" },
@@ -436,16 +437,17 @@ requires-dist = [
     { name = "pillow", specifier = ">=10.2.0" },
     { name = "playwright", specifier = ">=1.41.2" },
     { name = "pydantic", specifier = ">=2.7.0" },
-    { name = "pylibmagic", specifier = ">=0.5.0" },
     { name = "pytesseract", specifier = ">=0.3.10" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
     { name = "python-docx", specifier = ">=1.1.0" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "python-magic", specifier = ">=0.4.27" },
+    { name = "python-magic-bin", specifier = ">=0.4.14" },
     { name = "python-pptx", specifier = ">=0.6.23" },
     { name = "requests", specifier = ">=2.31.0" },
     { name = "scrapy", specifier = ">=2.11.0" },
 ]
+provides-extras = ["dev"]
 
 [[package]]
 name = "lxml"
@@ -801,20 +803,6 @@ wheels = [
 ]
 
 [[package]]
-name = "pylibmagic"
-version = "0.5.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/b2/43/224e264598573f0e8befb13c1db7b5a28d1b43b5e7c26cc48eced1250f5c/pylibmagic-0.5.0.tar.gz", hash = "sha256:942f4f194994f09021f6a4e6e6477ceeb28e4e92dc268fda10d96fa45c8c9ec4", size = 13905 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/23/d7/2b22d223c4b667b5eacb8ab59c16ac907c66cd4a874e9565f4488e663880/pylibmagic-0.5.0-py3-none-macosx_10_9_x86_64.whl", hash = "sha256:6e4aed7e50e7be87c33d7616393ec605be494388576efe3baa300da1d4c99703", size = 697038 },
-    { url = "https://files.pythonhosted.org/packages/f9/69/ddecd0e57b1eff57abaee3aad1f435621e9907a2ea900612f7c13cce4904/pylibmagic-0.5.0-py3-none-macosx_11_0_arm64.whl", hash = "sha256:f403cf26e530fa45bcb260fed80f1cecc2df777f2d0239078a234b4f2f97dbf7", size = 697602 },
-    { url = "https://files.pythonhosted.org/packages/79/30/31e159d326f893466d3911f174cad689c57ecb33769fddb63262a9b319e8/pylibmagic-0.5.0-py3-none-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:e8614c1e9d7bb0c6b6989646e385a514acb111fed9ec64f50aaf0e21dcf7b7bb", size = 617427 },
-    { url = "https://files.pythonhosted.org/packages/99/49/775ba344737cd503dc4dac029446d94f024e1744ef7755e89f4e7b146b5f/pylibmagic-0.5.0-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:24b5bb791d42653d2668913c7b9a789b5458a2fff09d0ec3c8af33a1204eea6a", size = 619447 },
-    { url = "https://files.pythonhosted.org/packages/41/c5/a5205b60eea794a8d5db0310e6ae0031875c875c2b4d140fa57192678bcb/pylibmagic-0.5.0-py3-none-musllinux_1_1_aarch64.whl", hash = "sha256:10efe9403e45f3c9f379800991fb5f73c0f0fc80db4ec79b5e6db4d0a437a253", size = 652901 },
-    { url = "https://files.pythonhosted.org/packages/65/46/b8a8cf8c30b9ef58c8f0d3ce8e86bf71764189e8e5b1d2f80dcbc1c422a0/pylibmagic-0.5.0-py3-none-musllinux_1_1_x86_64.whl", hash = "sha256:948e94de523211c01a8dc1eee235e3433bdc96a39d7ecf8039b814386c27b832", size = 658279 },
-]
-
-[[package]]
 name = "pyopenssl"
 version = "25.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -890,6 +878,16 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/da/db/0b3e28ac047452d079d375ec6798bf76a036a08182dbb39ed38116a49130/python-magic-0.4.27.tar.gz", hash = "sha256:c1ba14b08e4a5f5c31a302b7721239695b2f0f058d125bd5ce1ee36b9d9d3c3b", size = 14677 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/6c/73/9f872cb81fc5c3bb48f7227872c28975f998f3e7c2b1c16e95e6432bbb90/python_magic-0.4.27-py2.py3-none-any.whl", hash = "sha256:c212960ad306f700aa0d01e5d7a325d20548ff97eb9920dcd29513174f0294d3", size = 13840 },
+]
+
+[[package]]
+name = "python-magic-bin"
+version = "0.4.14"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/32/2c/bbe8ad26591745da2c4692ea571145fb027c8ee1a0540407aa327684c4ce/python_magic_bin-0.4.14-py2.py3-none-macosx_10_6_intel.whl", hash = "sha256:7b1743b3dbf16601d6eedf4e7c2c9a637901b0faaf24ad4df4d4527e7d8f66a4", size = 334318 },
+    { url = "https://files.pythonhosted.org/packages/5a/5d/10b9ac745d9fd2f7151a2ab901e6bb6983dbd70e87c71111f54859d1ca2e/python_magic_bin-0.4.14-py2.py3-none-win32.whl", hash = "sha256:34a788c03adde7608028203e2dbb208f1f62225ad91518787ae26d603ae68892", size = 397784 },
+    { url = "https://files.pythonhosted.org/packages/07/c2/094e3d62b906d952537196603a23aec4bcd7c6126bf80eb14e6f9f4be3a2/python_magic_bin-0.4.14-py2.py3-none-win_amd64.whl", hash = "sha256:90be6206ad31071a36065a2fc169c5afb5e0355cbe6030e87641c6c62edc2b69", size = 409299 },
 ]
 
 [[package]]
