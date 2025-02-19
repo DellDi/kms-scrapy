@@ -33,6 +33,8 @@ ENV/
 
 # Project specific
 output/
+output-kms/
+output-jira/
 *.log
 .env
 
