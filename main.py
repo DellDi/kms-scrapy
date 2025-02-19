@@ -6,7 +6,7 @@ from crawler.core.spider import ConfluenceSpider
 
 def main():
     # 创建输出目录
-    output_dir = "output"
+    output_dir = "output-kms"
     # 先判断输出的output目录下是否存在管道记录confluence.json,存在那么先删除掉
     if os.path.exists(f"{output_dir}/{ConfluenceSpider.name}.json"):
         os.remove(f"{output_dir}/{ConfluenceSpider.name}.json")

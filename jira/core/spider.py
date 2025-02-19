@@ -2,9 +2,9 @@ import logging
 from typing import Dict, Optional, Generator, Any, Union
 import json
 import requests
+from pydantic import BaseModel, Field
 from bs4 import BeautifulSoup
-from dataclasses import dataclass
-from datetime import datetime
+from bs4.element import Tag
 from urllib.parse import urljoin, urlencode
 
 from .auth import AuthManager, AuthError
@@ -17,32 +17,69 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# 选择器配置
+SELECTORS = {
+    "key": "#key-val",
+    "summary": "#summary-val",
+    "description": "#description-val",
+    "labels": "#wrap-labels .lozenge span",
+    "customer_name": "#customfield_10000-val",
+    "created_date": "#created-val time",
+    "resolved_date": "#resolutiondate-val time",
+    "reporter": "#reporter-val",
+    "assignee": "#assignee-val",
+    "status": "#resolution-val",
+    "priority": "#priority-val",
+    "type": "#type-val",
+    "attachments": "#attachmentmodule .attachment-title"
+}
 
-@dataclass
-class JiraIssue:
+class JiraIssue(BaseModel):
     """Jira问题数据模型"""
 
-    id: str
-    key: str
-    summary: str
-    description: str
-    created_date: str
-    resolved_date: str
-    customer_name: str
-    reporter: str
-    assignee: str
-    type_jira: str
-    status: str
-    priority: str
-    annex_str: str
-    optimized_content: Optional[str] = None
+    id: str = Field(..., description="问题ID")
+    key: str = Field(..., description="问题Key")
+    link: str = Field(..., description="问题链接")
+    summary: str = Field(..., description="问题摘要")
+    description: str = Field(None, description="问题描述")
+    created_date: str = Field(None, description="创建日期")
+    resolved_date: str = Field(None, description="解决日期")
+    customer_name: str = Field(None, description="客户名称")
+    reporter: str = Field(None, description="报告人")
+    assignee: str = Field(None, description="指派人")
+    type_jira: str = Field(None, description="问题类型")
+    status: str = Field(None, description="状态")
+    priority: str = Field(None, description="优先级")
+    labels: list = Field(default_factory=list, description="标签列表")
+    annex_str: str = Field("", description="附件列表")
+    optimized_content: Optional[str] = Field(None, description="优化后的内容")
 
+    class Config:
+        allow_none = True
+
+def extract_value(soup: BeautifulSoup, selector: str, attr: str = None, default: Any = None) -> Any:
+    """从BeautifulSoup中提取值的通用函数"""
+    element = soup.select_one(selector)
+    if not element:
+        return default
+
+    if attr:
+        return element.get(attr, default)
+
+    return element.text.strip()
+
+def extract_list(soup: BeautifulSoup, selector: str) -> list:
+    """从BeautifulSoup中提取列表的通用函数"""
+    elements = soup.select(selector)
+    return [element.text.strip() for element in elements]
+
+def format_attachment(element: Tag) -> str:
+    """格式化附件链接"""
+    return f"[{element.text.strip()}]({element['href']})"
 
 class ParseError(Exception):
     """解析异常"""
-
     pass
-
 
 class JiraSpider:
     """Jira爬虫主类"""
@@ -263,115 +300,58 @@ class JiraSpider:
         )
 
         try:
-            logger.debug(f"问题详情页响应: {response}")
-            # # 导出当前请求的headers到文件 -- 调试
-            # headers = response.request.headers
-            # with open("headers.txt", "w") as f:
-            #     f.write(str(headers))
-
-            # # 导出响应的html
-            # with open("response.html", "w") as f:
-            #     f.write(response.text)
-
             soup = BeautifulSoup(response.text, "html.parser", from_encoding="utf-8")
             keyDom = soup.select_one("#key-val")
-            # 提取问题信息
-            key = keyDom.text.strip() if keyDom else None
+
+            # 获取关键信息
+            key = extract_value(soup, SELECTORS["key"])
             if not key:
-                # 抛出异常
                 raise ParseError("未找到问题关键字")
 
-            id = keyDom["rel"] if keyDom else None
-            summary = (
-                soup.select_one("#summary-val").text.strip()
-                if soup.select_one("#summary-val")
-                else None
-            )
-            description = (
-                soup.select_one("#descr总页数iption-val").text.strip()
-                if soup.select_one("#description-val")
-                else None
-            )
-            customer_name = (
-                soup.select_one("#customfield_10000-val").text.strip()
-                if soup.select_one("#customfield_10000-val")
-                else None
-            )
+            # 修复 id 提取逻辑
+            id = None
+            if keyDom and "rel" in keyDom.attrs:
+                rel_value = keyDom["rel"]
+                # 确保获取字符串类型的 id
+                id = str(rel_value[0]) if isinstance(rel_value, list) else str(rel_value)
 
-            # 提取字段值
-            created_date = (
-                soup.select_one("#created-val time")["datetime"]
-                if soup.select_one("#created-val time")
-                else None
-            )
-            resolved_date = (
-                soup.select_one("#resolutiondate-val time")["datetime"]
-                if soup.select_one("#resolutiondate-val time")
-                else None
-            )
-            reporter = (
-                soup.select_one("#reporter-val").text.strip()
-                if soup.select_one("#reporter-val")
-                else None
-            )
-            assignee = (
-                soup.select_one("#assignee-val").text.strip()
-                if soup.select_one("#assignee-val")
-                else None
-            )
-            status = (
-                soup.select_one("#resolution-val").text.strip()
-                if soup.select_one("#resolution-val")
-                else None
-            )
-            priority = (
-                soup.select_one("#priority-val").text.strip()
-                if soup.select_one("#priority-val")
-                else None
-            )
-            # 功能类型
-            type_jira = (
-                soup.select_one("#type-val").text.strip() if soup.select_one("#type-val") else None
-            )
+            # 需求单地址
+            link = f"{config.spider.base_url}/browse/{key}"
+
+            # 提取基本字段
+            issue_data = {
+                "id": id,
+                "key": key,
+                "link": link,
+                "summary": extract_value(soup, SELECTORS["summary"]),
+                "description": extract_value(soup, SELECTORS["description"]),
+                "customer_name": extract_value(soup, SELECTORS["customer_name"]),
+                "created_date": extract_value(soup, SELECTORS["created_date"], "datetime"),
+                "resolved_date": extract_value(soup, SELECTORS["resolved_date"], "datetime"),
+                "reporter": extract_value(soup, SELECTORS["reporter"]),
+                "assignee": extract_value(soup, SELECTORS["assignee"]),
+                "status": extract_value(soup, SELECTORS["status"]),
+                "priority": extract_value(soup, SELECTORS["priority"]),
+                "type_jira": extract_value(soup, SELECTORS["type"]),
+                "labels": extract_list(soup, SELECTORS["labels"]),
+            }
 
             # 附件列表
-            annex = []
-            annex_ol = soup.select("#attachmentmodule .attachment-title")
-            for a in annex_ol:
-                annex.append(f"[{a.text.strip()}]({a['href']})")
-            # 附件列表转换为字符串
-            annex_str = "\n".join(annex)
-
-            logger.debug(f"解析问题详情: {key}")
-            logger.debug(f"摘要: {summary}")
-            logger.debug(f"描述: {description[:100]}...")
-            logger.debug(f"客户名称: {customer_name}")
-            logger.debug(f"创建日期: {created_date}")
-            logger.debug(f"解决日期: {resolved_date}")
-            logger.debug(f"报告人: {reporter}")
-            logger.debug(f"指派人: {assignee}")
-            logger.debug(f"状态: {status}")
-            logger.debug(f"附件列表：{annex_str}")
-            logger.debug(f"优先级: {priority}")
-            logger.debug(f"功能类型: {type_jira}")
+            attachments = [format_attachment(a) for a in soup.select(SELECTORS["attachments"])]
+            issue_data["annex_str"] = "\n".join(attachments)
 
             # 优化内容
-            optimized_content = self.optimizer.optimize(description)
+            if issue_data["description"]:
+                issue_data["optimized_content"] = self.optimizer.optimize(issue_data["description"], strip=True)
 
-            return JiraIssue(
-                id=id,
-                key=key,
-                summary=summary,
-                description=description,
-                type_jira=type_jira,
-                created_date=created_date,
-                resolved_date=resolved_date,
-                reporter=reporter,
-                assignee=assignee,
-                status=status,
-                priority=priority,
-                optimized_content=optimized_content,
-            )
+            # 记录日志
+            for key, value in issue_data.items():
+                if isinstance(value, str) and len(value) > 100:
+                    logger.debug(f"{key}: {value[:100]}...")
+                else:
+                    logger.debug(f"{key}: {value}")
+
+            return JiraIssue(**issue_data)
 
         except (AttributeError, KeyError) as e:
             logger.error(f"解析问题详情失败: {str(e)}")

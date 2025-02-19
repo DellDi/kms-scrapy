@@ -4,14 +4,14 @@ import logging
 from typing import Optional, List, Dict, Any
 from .content import KMSItem
 
-
 class DocumentExporter:
     """文档导出器，负责将KMSItem对象导出为Markdown文件"""
+    output_dir: str = "output-kms"  # 输出根目录
 
     def __init__(self, base_dir: str = None):
         self.base_dir = base_dir or os.getcwd()
-        self.markdown_dir = os.path.join(self.base_dir, "output", "markdown")
-        self.attachments_dir = os.path.join(self.base_dir, "output", "attachments")
+        self.markdown_dir = os.path.join(self.base_dir, self.output_dir, "markdown")
+        self.attachments_dir = os.path.join(self.base_dir, self.output_dir, "attachments")
         self.logger = logging.getLogger(__name__)
 
     def _create_dirs(
@@ -23,12 +23,12 @@ class DocumentExporter:
             output_path = depth_info.get("output_path")
             parent_path = depth_info.get("_parent_path", "")
             current_depth = depth_info.get("current_depth", 0)
-            
+
             self.logger.info(f"创建目录 - 深度: {current_depth}")
             self.logger.info(f"父路径: {parent_path}")
             self.logger.info(f"当前输出路径: {output_path}")
             self.logger.info(f"完整深度信息: {depth_info}")
-            
+
             if output_path:
                 doc_markdown_dir = os.path.join(self.markdown_dir, output_path)
                 self.logger.info(f"使用输出路径创建目录: {doc_markdown_dir}")
@@ -40,7 +40,7 @@ class DocumentExporter:
         else:
             doc_markdown_dir = os.path.join(self.markdown_dir, safe_title)
             os.makedirs(doc_markdown_dir, exist_ok=True)
-        
+
         # 只在有附件时创建附件目录
         doc_attachments_dir = os.path.join(doc_markdown_dir, "attachments")
         if attachments:

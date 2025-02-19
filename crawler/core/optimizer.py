@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+import textwrap
 import json
 import requests
 from typing import Optional, Generator, Dict, Any, Union
@@ -10,13 +11,13 @@ class ContentOptimizer(ABC):
 
     SYSTEM_PROMPT = f"""
         你是一个智能的语义化提炼分析小助手，我可以帮你提取和优化网页内容。
-        
+
         ⭐️<重要>⭐️如果得到的内容是空白或者没有任何语义的内容，请直接响应输出```md ```即可。
-        
+
         如果是类似的HTML结构的内容，请转换为适合嵌入向量数据库的Markdown格式，请参照一下要求
 
         要求：
-        
+
         1.  尽可能保留HTML的语义结构和层级关系，并将其转换为Markdown语法。
         2.  对转换后的Markdown内容进行清洗、优化和结构化处理，使其更适合嵌入向量数据库。
             *   去除无用信息和噪声，例如HTML标签、注释、脚本等。
@@ -40,7 +41,9 @@ class ContentOptimizer(ABC):
     """
 
     @abstractmethod
-    def optimize(self, content: str, stream: bool = False) -> Union[str, Generator[Dict[str, Any], None, None]]:
+    def optimize(
+        self, content: str, stream: bool = False, strip=False
+    ) -> Union[str, Generator[Dict[str, Any], None, None]]:
         """优化内容的抽象方法"""
         pass
 
@@ -51,32 +54,27 @@ class OpenAICompatibleAdapter:
     def __init__(self, api_key: str, api_url: str, model: str = "default"):
         """
         初始化OpenAI兼容适配器
-        
+
         Args:
             api_key: API密钥
             api_url: API端点URL
             model: 模型名称，默认为"default"
         """
         self.api_key = api_key
-        self.api_url = api_url.rstrip('/')
+        self.api_url = api_url.rstrip("/")
         self.model = model
-        self.headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}"
-        }
+        self.headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
 
     def process_response(
-        self, 
-        response: requests.Response, 
-        stream: bool = True
+        self, response: requests.Response, stream: bool = True
     ) -> Union[Dict[str, Any], Generator[Dict[str, Any], None, None]]:
         """
         处理API响应
-        
+
         Args:
             response: requests.Response对象
             stream: 是否使用流式响应
-            
+
         Returns:
             如果stream=True，返回响应生成器
             如果stream=False，返回完整响应
@@ -86,15 +84,14 @@ class OpenAICompatibleAdapter:
         return response.json()
 
     def _handle_streaming_response(
-        self, 
-        response: requests.Response
+        self, response: requests.Response
     ) -> Generator[Dict[str, Any], None, None]:
         """
         处理流式响应
-        
+
         Args:
             response: requests.Response对象
-            
+
         Yields:
             Dict: OpenAI格式的响应块
         """
@@ -103,11 +100,11 @@ class OpenAICompatibleAdapter:
                 try:
                     # 支持多种响应格式
                     try:
-                        data = json.loads(line.decode('utf-8').strip())
+                        data = json.loads(line.decode("utf-8").strip())
                     except:
                         # 处理以"data: "开头的SSE格式
-                        if line.startswith(b'data: '):
-                            data = json.loads(line.decode('utf-8')[6:])
+                        if line.startswith(b"data: "):
+                            data = json.loads(line.decode("utf-8")[6:])
                         else:
                             continue
 
@@ -129,14 +126,14 @@ class OpenAICompatibleAdapter:
                         is_end = data.get("end", False)
 
                     yield {
-                        "choices": [{
-                            "delta": {
-                                "content": content
-                            },
-                            "finish_reason": "stop" if is_end else None,
-                            "index": 0
-                        }],
-                        "object": "chat.completion.chunk"
+                        "choices": [
+                            {
+                                "delta": {"content": content},
+                                "finish_reason": "stop" if is_end else None,
+                                "index": 0,
+                            }
+                        ],
+                        "object": "chat.completion.chunk",
                     }
 
                     if is_end:
@@ -148,21 +145,17 @@ class OpenAICompatibleAdapter:
                     continue
 
     def get_completion(
-        self,
-        messages: list,
-        stream: bool = True,
-        temperature: float = 0.2,
-        **kwargs
+        self, messages: list, stream: bool = True, temperature: float = 0.2, **kwargs
     ) -> Union[Dict[str, Any], Generator[Dict[str, Any], None, None]]:
         """
         获取完成结果
-        
+
         Args:
             messages: 消息列表
             stream: 是否使用流式响应，默认为True
             temperature: 温度参数
             **kwargs: 其他参数
-            
+
         Returns:
             如果stream=True，返回响应生成器
             如果stream=False，返回完整响应
@@ -172,16 +165,11 @@ class OpenAICompatibleAdapter:
             "messages": messages,
             "temperature": temperature,
             "stream": stream,
-            **kwargs
+            **kwargs,
         }
 
         try:
-            response = requests.post(
-                self.api_url,
-                headers=self.headers,
-                json=data,
-                stream=stream
-            )
+            response = requests.post(self.api_url, headers=self.headers, json=data, stream=stream)
             response.raise_for_status()
             return self.process_response(response, stream)
         except Exception as e:
@@ -190,15 +178,17 @@ class OpenAICompatibleAdapter:
 
 class StreamingResponseAdapter:
     """讯飞星火API流式响应适配器，转换为OpenAI格式"""
-    
+
     @staticmethod
-    def adapt_streaming_response(response: requests.Response) -> Generator[Dict[str, Any], None, None]:
+    def adapt_streaming_response(
+        response: requests.Response,
+    ) -> Generator[Dict[str, Any], None, None]:
         """
         将讯飞星火API的流式响应转换为OpenAI格式
-        
+
         Args:
             response: requests.Response对象
-        
+
         Yields:
             Dict: OpenAI格式的响应块
         """
@@ -207,25 +197,25 @@ class StreamingResponseAdapter:
                 try:
                     # 解析讯飞API响应
                     xunfei_data = json.loads(line)
-                    
+
                     # 检查是否是最后一条消息
                     is_end = xunfei_data.get("header", {}).get("status") == 2
-                    
+
                     # 获取文本内容
                     text = xunfei_data.get("payload", {}).get("choices", [{}])[0].get("text", "")
-                    
+
                     # 转换为OpenAI格式
                     yield {
-                        "choices": [{
-                            "delta": {
-                                "content": text
-                            },
-                            "finish_reason": "stop" if is_end else None,
-                            "index": 0
-                        }],
-                        "object": "chat.completion.chunk"
+                        "choices": [
+                            {
+                                "delta": {"content": text},
+                                "finish_reason": "stop" if is_end else None,
+                                "index": 0,
+                            }
+                        ],
+                        "object": "chat.completion.chunk",
                     }
-                    
+
                     if is_end:
                         break
                 except json.JSONDecodeError:
@@ -239,7 +229,7 @@ class BaichuanOptimizer(ContentOptimizer):
         self.api_key = api_key or config.baichuan.api_key
         self.api_url = api_url or config.baichuan.api_url
 
-    def optimize(self, content: str, stream: bool = False) -> str:
+    def optimize(self, content: str, stream: bool = False, strip=False) -> str:
         """使用百川API优化内容"""
         if not self.api_key:
             return content
@@ -274,20 +264,26 @@ class XunfeiOptimizer(ContentOptimizer):
         self.api_url = api_url or config.xunfei.api_url
         self.adapter = StreamingResponseAdapter()
 
-    def optimize(self, content: str, stream: bool = False) -> Union[str, Generator[Dict[str, Any], None, None]]:
+    def optimize(
+        self, content: str, stream: bool = False, strip=False
+    ) -> Union[str, Generator[Dict[str, Any], None, None]]:
         """
         使用讯飞API优化内容
-        
+
         Args:
             content: 要优化的内容
             stream: 是否使用流式响应
-            
+
         Returns:
             如果stream=False，返回优化后的内容字符串
             如果stream=True，返回一个生成器，产生OpenAI格式的流式响应
         """
         if not self.api_key:
             return content
+
+        if strip:
+            content_dedent = textwrap.dedent(content)
+            return content_dedent
 
         headers = {"Content-Type": "application/json", "Authorization": f"Bearer {self.api_key}"}
 
@@ -304,13 +300,13 @@ class XunfeiOptimizer(ContentOptimizer):
         try:
             response = requests.post(self.api_url, headers=headers, json=data, stream=stream)
             response.raise_for_status()
-            
+
             if stream:
                 return self.adapter.adapt_streaming_response(response)
             else:
                 result = response.json()
                 return result["choices"][0]["message"]["content"]
-                
+
         except Exception as e:
             # 如果API调用失败，返回原始内容
             return content
@@ -322,7 +318,7 @@ class OpenAICompatibleOptimizer(ContentOptimizer):
     def __init__(self, api_key: str, api_url: str, model: str = "default"):
         """
         初始化通用优化器
-        
+
         Args:
             api_key: API密钥
             api_url: API端点URL
@@ -330,14 +326,16 @@ class OpenAICompatibleOptimizer(ContentOptimizer):
         """
         self.adapter = OpenAICompatibleAdapter(api_key, api_url, model)
 
-    def optimize(self, content: str, stream: bool = True) -> Union[str, Generator[Dict[str, Any], None, None]]:
+    def optimize(
+        self, content: str, stream: bool = True, strip=False
+    ) -> Union[str, Generator[Dict[str, Any], None, None]]:
         """
         使用通用适配器优化内容
-        
+
         Args:
             content: 要优化的内容
             stream: 是否使用流式响应，默认为True
-            
+
         Returns:
             如果stream=False，返回优化后的内容字符串
             如果stream=True，返回一个生成器，产生OpenAI格式的流式响应
@@ -349,13 +347,13 @@ class OpenAICompatibleOptimizer(ContentOptimizer):
                     {"role": "user", "content": content},
                 ],
                 stream=stream,
-                temperature=0.2
+                temperature=0.2,
             )
-            
+
             if not stream:
                 return result["choices"][0]["message"]["content"]
             return result
-                
+
         except Exception as e:
             # 如果API调用失败，返回原始内容
             print(f"优化内容时出错: {str(e)}")
@@ -371,25 +369,25 @@ class OptimizerFactory:
         api_key: Optional[str] = None,
         api_url: Optional[str] = None,
         model: Optional[str] = None,
-        **kwargs
+        **kwargs,
     ) -> ContentOptimizer:
         """
         创建优化器实例
-        
+
         Args:
             optimizer_type: 优化器类型
             api_key: API密钥（可选）
             api_url: API URL（可选）
             model: 模型名称（可选）
             **kwargs: 其他参数
-            
+
         Returns:
             ContentOptimizer: 优化器实例
         """
         optimizers = {
             "baichuan": BaichuanOptimizer,
             "xunfei": XunfeiOptimizer,
-            "compatible": OpenAICompatibleOptimizer
+            "compatible": OpenAICompatibleOptimizer,
         }
 
         optimizer_class = optimizers.get(optimizer_type)
@@ -400,5 +398,5 @@ class OptimizerFactory:
             if not api_key or not api_url:
                 raise ValueError("compatible 优化器需要提供 api_key 和 api_url")
             return optimizer_class(api_key, api_url, model or "default")
-            
+
         return optimizer_class(api_key, api_url)

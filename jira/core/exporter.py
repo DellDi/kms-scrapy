@@ -12,9 +12,12 @@ from .spider import JiraIssue
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 class ExportError(Exception):
     """导出相关异常"""
+
     pass
+
 
 class DocumentExporter:
     """文档导出处理类"""
@@ -48,10 +51,7 @@ class DocumentExporter:
             Tuple[str, str]: (文件路径, 目录路径)
         """
         # 生成分页目录
-        page_dir = os.path.join(
-            self.base_dir,
-            f"{config.exporter.page_dir_prefix}{page_num}"
-        )
+        page_dir = os.path.join(self.base_dir, f"{config.exporter.page_dir_prefix}{page_num}")
 
         # 生成文件路径 (使用问题Key作为文件名)
         file_path = os.path.join(page_dir, f"{issue.key}.md")
@@ -69,29 +69,38 @@ class DocumentExporter:
             str: 格式化后的Markdown内容
         """
         # 使用textwrap.dedent保持正确的缩进
-        template = textwrap.dedent(f"""
-            # [{issue.key}] {issue.summary}
+        template = textwrap.dedent(
+            f"""
+# {issue.summary}
 
-            ## 基本信息
+## 问题链接: [{issue.key}]({issue.link})
 
-            - **创建时间**: {issue.created_date}
-            - **解决时间**: {issue.resolved_date}
-            - **报告人**: {issue.reporter}
-            - **经办人**: {issue.assignee}
-            - **状态**: {issue.status}
-            - **优先级**: {issue.priority}
+## 基本信息
 
-            ## 问题描述
+- **客户名称**: {issue.customer_name}
+- **创建时间**: {issue.created_date}
+- **解决时间**: {issue.resolved_date}
+- **报告人**: {issue.reporter}
+- **经办人**: {issue.assignee}
+- **状态**: {issue.status}
+- **优先级**: {issue.priority}
+- **标签**: {", ".join(issue.labels)}
 
-            {issue.description}
+## 问题描述
 
-            ## 优化后的内容
+{issue.description}
 
-            {issue.optimized_content or "（无优化内容）"}
+## 优化后的内容
 
-            ---
-            *本文档由爬虫自动生成于 {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}*
-        """).strip()
+{issue.optimized_content or "（无优化内容）"}
+
+## 附件内容
+{issue.annex_str or "（无附件内容）"}
+
+---
+*本文档由爬虫自动生成于 {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}*
+        """
+        ).strip()
 
         return template
 
@@ -108,17 +117,14 @@ class DocumentExporter:
             self._ensure_directory(os.path.dirname(file_path))
 
             # 写入文件
-            with open(file_path, 'w', encoding=self.encoding) as f:
+            with open(file_path, "w", encoding=self.encoding) as f:
                 f.write(content)
 
         except Exception as e:
             raise ExportError(f"写入文件失败: {str(e)}")
 
     def export_issue(
-        self,
-        issue: JiraIssue,
-        page_num: int,
-        overwrite: bool = True
+        self, issue: JiraIssue, page_num: int, overwrite: bool = True
     ) -> Optional[Tuple[str, str]]:
         """
         导出单个问题到Markdown文件
@@ -154,10 +160,7 @@ class DocumentExporter:
             return None
 
     def batch_export(
-        self,
-        issues: List[JiraIssue],
-        page_num: int,
-        max_workers: int = 4
+        self, issues: List[JiraIssue], page_num: int, max_workers: int = 4
     ) -> List[Tuple[str, str]]:
         """
         批量导出问题
@@ -173,18 +176,14 @@ class DocumentExporter:
         successful_exports = []
 
         # 确保分页目录存在
-        page_dir = os.path.join(
-            self.base_dir,
-            f"{config.exporter.page_dir_prefix}{page_num}"
-        )
+        page_dir = os.path.join(self.base_dir, f"{config.exporter.page_dir_prefix}{page_num}")
         self._ensure_directory(page_dir)
 
         # 使用线程池并行处理
         with futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
             # 提交所有导出任务
             future_to_issue = {
-                executor.submit(self.export_issue, issue, page_num): issue
-                for issue in issues
+                executor.submit(self.export_issue, issue, page_num): issue for issue in issues
             }
 
             # 收集结果
