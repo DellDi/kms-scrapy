@@ -119,7 +119,7 @@ process.crawl(
 2. 运行爬虫：
 
 ```bash
-python main.py
+uv run crawler/main.py
 ```
 
 爬取的数据将保存在 `output` 目录下的 JSON 文件中。
@@ -129,7 +129,7 @@ python main.py
 1. 运行爬虫：
 
 ```bash
-python jira/main.py
+uv run jira/main.py
 ```
 
 爬取的数据将保存在 `output-jira` 目录下，按页码组织的Markdown文件：
@@ -158,7 +158,7 @@ DIFY_API_ENDPOINT=https://your-dify-instance/v1
 2. 上传文档到知识库：
 
 ```bash
-python dify/examples/upload_documents.py
+uv run dify/examples/upload_documents.py
 ```
 
 这将：
@@ -208,7 +208,7 @@ python dify/examples/upload_documents.py
 安装开发依赖：
 
 ```bash
-uv pip install -e ".[dev]"
+uv pip install -e .
 ```
 
 运行测试：

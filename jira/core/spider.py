@@ -11,16 +11,13 @@ from .auth import AuthManager, AuthError
 from .config import config
 from crawler.core.optimizer import OptimizerFactory
 
-# 配置日志
-logging.basicConfig(
-    level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+# 获取当前模块的日志记录器
 logger = logging.getLogger(__name__)
 
 # 选择器配置
 SELECTORS = {
     "key": "#key-val",
-    "summary": "#summary-val",
+    "summary": "#summary-val", 
     "description": "#description-val",
     "labels": "#wrap-labels .lozenge span",
     "customer_name": "#customfield_10000-val",
@@ -84,9 +81,14 @@ class ParseError(Exception):
 class JiraSpider:
     """Jira爬虫主类"""
 
-    def __init__(self):
-        """初始化爬虫"""
-        self.auth_manager = AuthManager()
+    def __init__(self, auth_manager: AuthManager):
+        """
+        初始化爬虫
+        
+        Args:
+            auth_manager: 认证管理器实例
+        """
+        self.auth_manager = auth_manager
         self.optimizer = OptimizerFactory.create_optimizer()
         self.session = requests.Session()
 
@@ -143,10 +145,14 @@ class JiraSpider:
 
             # 检查是否需要认证
             if response.status_code == 401 and retry_count < config.spider.retry_times:
-                logger.info("认证失败，尝试刷新认证信息")
+                logger.info("认证失败，尝试刷新认证")
                 if self.auth_manager.refresh_authentication():
                     return self._make_request(
-                        url=url, method=method, data=data, retry_count=retry_count + 1, **kwargs
+                        url=url, 
+                        method=method, 
+                        data=data,
+                        retry_count=retry_count + 1,
+                        **kwargs
                     )
 
             # 检查其他需要重试的状态码
@@ -156,7 +162,11 @@ class JiraSpider:
             ):
                 logger.info(f"请求失败(状态码:{response.status_code})，正在重试({retry_count + 1})")
                 return self._make_request(
-                    url=url, method=method, data=data, retry_count=retry_count + 1, **kwargs
+                    url=url,
+                    method=method,
+                    data=data,
+                    retry_count=retry_count + 1,
+                    **kwargs
                 )
 
             response.raise_for_status()
@@ -166,7 +176,11 @@ class JiraSpider:
             if retry_count < config.spider.retry_times:
                 logger.warning(f"请求异常，正在重试({retry_count + 1}): {str(e)}")
                 return self._make_request(
-                    url=url, method=method, data=data, retry_count=retry_count + 1, **kwargs
+                    url=url,
+                    method=method,
+                    data=data,
+                    retry_count=retry_count + 1,
+                    **kwargs
                 )
             raise
 

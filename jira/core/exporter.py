@@ -124,7 +124,7 @@ class DocumentExporter:
             raise ExportError(f"写入文件失败: {str(e)}")
 
     def export_issue(
-        self, issue: JiraIssue, page_num: int, overwrite: bool = True
+            self, issue: JiraIssue, page_num: int, overwrite: bool = True
     ) -> Optional[Tuple[str, str]]:
         """
         导出单个问题到Markdown文件
@@ -160,7 +160,7 @@ class DocumentExporter:
             return None
 
     def batch_export(
-        self, issues: List[JiraIssue], page_num: int, max_workers: int = 4
+            self, issues: List[JiraIssue], page_num: int, max_workers: int = 4
     ) -> List[Tuple[str, str]]:
         """
         批量导出问题

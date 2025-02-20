@@ -4,8 +4,8 @@ from typing import Dict, List
 @dataclass
 class AuthConfig:
     """认证配置"""
-    username: str = "newsee"
-    password: str = "newsee"
+    username: str = "zengdi"
+    password: str = "1"
     basic_auth: str = "bmV3c2VlOm5ld3NlZQ=="  # base64(newsee:newsee)
 
 @dataclass
@@ -18,12 +18,14 @@ class SpiderConfig:
     retry_http_codes: List[int] = field(default_factory=lambda: [500, 502, 503, 504, 400])
 
     # 默认请求头
-    # 公共请求头
     default_headers: Dict[str, str] = field(
         default_factory=lambda: {
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
             "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6",
+            "Cache-Control": "no-cache",
             "Host": "bug.new-see.com:8088",
             "Proxy-Connection": "keep-alive",
+            "Pragma": "no-cache",
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36 Edg/133.0.0.0"
         }
     )
@@ -31,11 +33,10 @@ class SpiderConfig:
     # 默认Cookie模板 (这些值将在登录时动态更新)
     default_cookies: Dict[str, str] = field(
         default_factory=lambda: {
-            "JSESSIONID": "1644472D6161630BF16CBF91E329B319",
-            "seraph.rememberme.cookie": "78529:3A6b80fcb3a470c9466d94aa306df419474d154495",
-            "atlassian.xsrf.token": "AYXN-UMWG-3K4D-ZXVN_02659c825f447c735b172549b5c51d254c151ef5_lin",
             "ajs_user_id": "b855f69db6d93f0a1a50b21008c841d7416fc802",
             "ajs_anonymous_id": "be8fadfe-3cd8-4b1b-9c20-c467f8b20eae",
+            "JSESSIONID": "96B1846618FD77935FF3F931B540D18D",
+            "atlassian.xsrf.token": "AYXN-UMWG-3K4D-ZXVN_a6ee74f8634507193fe1e38c32b8a86f95b7a130_lout"
         }
     )
 

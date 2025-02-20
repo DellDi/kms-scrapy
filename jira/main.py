@@ -6,28 +6,57 @@ import logging
 import sys
 from typing import Optional
 from datetime import datetime
+import os
 
 from jira.core import (
-    config,
     JiraSpider,
     DocumentExporter,
+    AuthManager,
     AuthError,
     ExportError
 )
 
-# 配置日志
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout),
-        logging.FileHandler(
-            f'jira_spider_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log'
-        )
-    ]
-)
+def setup_logging():
+    """配置日志"""
+    # 创建logs目录（如果不存在）
+    log_dir = "logs"
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
 
-logger = logging.getLogger(__name__)
+    # 生成日志文件路径
+    log_file = os.path.join(
+        log_dir,
+        f'jira_spider_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log'
+    )
+
+    # 配置根日志记录器
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.DEBUG)  # 设置为DEBUG以捕获所有级别的日志
+
+    # 创建并配置文件处理器
+    file_handler = logging.FileHandler(log_file, encoding='utf-8')
+    file_handler.setLevel(logging.DEBUG)
+    file_format = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    file_handler.setFormatter(file_format)
+    root_logger.addHandler(file_handler)
+
+    # 创建并配置控制台处理器
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(logging.INFO)  # 控制台只显示INFO及以上级别
+    console_format = logging.Formatter(
+        '%(asctime)s - %(levelname)s - %(message)s',
+        datefmt='%H:%M:%S'
+    )
+    console_handler.setFormatter(console_format)
+    root_logger.addHandler(console_handler)
+
+    return logging.getLogger(__name__)
+
+# 配置日志
+logger = setup_logging()
 
 def run_spider(clear_output: bool = True) -> Optional[bool]:
     """
@@ -40,7 +69,24 @@ def run_spider(clear_output: bool = True) -> Optional[bool]:
         Optional[bool]: 执行是否成功，出错返回None
     """
     try:
-        spider = JiraSpider()
+        # 初始化认证管理器
+        auth_manager = AuthManager()
+        
+        # 检查认证状态
+        logger.info("检查认证状态...")
+        auth_valid = auth_manager.check_authentication()
+        
+        if not auth_valid:
+            # 认证失败，尝试刷新认证
+            logger.info("认证已失效，尝试刷新认证...")
+            auth_valid = auth_manager.refresh_authentication()
+            if not auth_valid:
+                logger.error("认证刷新失败，无法继续")
+                return None
+            logger.info("认证刷新成功，继续执行...")
+
+        # 初始化爬虫和导出器
+        spider = JiraSpider(auth_manager)
         exporter = DocumentExporter()
 
         # 清空输出目录

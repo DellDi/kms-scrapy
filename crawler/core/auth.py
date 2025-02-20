@@ -3,7 +3,6 @@ from scrapy.http import Request, FormRequest
 import base64
 from .config import config
 
-
 class AuthManager:
     """认证管理器，处理所有与认证相关的逻辑"""
 

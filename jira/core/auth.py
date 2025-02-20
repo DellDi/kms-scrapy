@@ -5,7 +5,7 @@ from urllib.parse import urljoin, quote
 
 from .config import config
 
-# 配置日志
+# 获取当前模块的日志记录器
 logger = logging.getLogger(__name__)
 
 class AuthError(Exception):
@@ -170,32 +170,30 @@ class AuthManager:
             bool: 认证是否有效
         """
         try:
+            logger.info("检查认证状态...")
             # 尝试访问一个需要认证的API
             session = requests.Session()
             request = self.create_authenticated_request(
-                "/rest/api/2/myself",  # Jira提供的当前用户信息API
-                method="GET"
+                "/rest/issueNav/1/issueTable", method="GET"
             )
             prepped = request.prepare()
             response = session.send(prepped)
 
             logger.debug(f"Auth check response status: {response.status_code}")
-            if response.status_code == 401:
-                logger.debug(f"Auth check response content: {response.text}")
-
-            # 检查响应状态并更新cookies
+            
+            # 如果认证有效，更新cookies并返回True
             if response.status_code == 200:
                 new_cookies = self.parse_set_cookie(response)
                 if new_cookies:
                     self.update_cookies(new_cookies)
-                logger.info("Authentication check successful")
+                logger.info("认证状态有效")
                 return True
-
-            logger.warning(f"Authentication check failed with status {response.status_code}")
+            
+            logger.info("认证状态无效")
             return False
 
         except Exception as e:
-            logger.error(f"Authentication check error: {str(e)}")
+            logger.error(f"认证检查出错: {str(e)}")
             raise AuthError(f"认证检查失败: {str(e)}")
 
     def refresh_authentication(self) -> bool:
@@ -206,23 +204,41 @@ class AuthManager:
             bool: 是否刷新成功
         """
         try:
-            logger.info("Attempting to refresh authentication")
+            logger.info("开始刷新认证...")
             # 登录获取新的认证信息
             session = requests.Session()
+            
+            # 构造与浏览器一致的请求数据
             login_data = {
                 "os_username": config.auth.username,
                 "os_password": config.auth.password,
-                "os_cookie": "true"
+                "os_cookie": "true",
+                "os_destination": "",  # 新增
+                "user_role": "",       # 新增
+                "atl_token": "",       # 新增
+                "login": "登录"         # 新增
             }
 
             request = self.create_authenticated_request(
                 "/login.jsp",
                 method="POST",
-                data=login_data
+                data=login_data,
+                headers={
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+                    "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6",
+                    "Cache-Control": "no-cache",
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "Origin": config.spider.base_url,
+                    "Pragma": "no-cache",
+                    "Proxy-Connection": "keep-alive",  # 新增
+                    "Referer": f"{config.spider.base_url}/login.jsp",
+                    "Upgrade-Insecure-Requests": "1",
+                    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36 Edg/133.0.0.0",
+                }
             )
 
             prepped = request.prepare()
-            response = session.send(prepped, allow_redirects=False)
+            response = session.send(prepped, allow_redirects=False, verify=False)  # 添加verify=False
 
             logger.debug(f"Auth refresh response status: {response.status_code}")
             logger.debug(f"Auth refresh response headers: {dict(response.headers)}")
@@ -233,12 +249,12 @@ class AuthManager:
                 new_cookies = self.parse_set_cookie(response)
                 if new_cookies:
                     self.update_cookies(new_cookies)
-                    logger.info("Authentication refresh successful")
+                    logger.info("认证刷新成功")
                     return True
 
-            logger.warning(f"Authentication refresh failed with status {response.status_code}")
+            logger.warning(f"认证刷新失败，状态码: {response.status_code}")
             return False
 
         except Exception as e:
-            logger.error(f"Authentication refresh error: {str(e)}")
+            logger.error(f"认证刷新出错: {str(e)}")
             raise AuthError(f"认证刷新失败: {str(e)}")

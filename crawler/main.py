@@ -2,11 +2,12 @@ import os
 from scrapy.crawler import CrawlerProcess
 from scrapy.utils.project import get_project_settings
 from crawler.core.spider import ConfluenceSpider
+from .core.config import SpiderConfig
 
 
 def main():
     # 创建输出目录
-    output_dir = "output-kms"
+    output_dir = SpiderConfig.output_dir
     # 先判断输出的output目录下是否存在管道记录confluence.json,存在那么先删除掉
     if os.path.exists(f"{output_dir}/{ConfluenceSpider.name}.json"):
         os.remove(f"{output_dir}/{ConfluenceSpider.name}.json")
