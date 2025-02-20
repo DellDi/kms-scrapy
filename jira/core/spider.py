@@ -314,7 +314,7 @@ class JiraSpider:
         )
 
         try:
-            soup = BeautifulSoup(response.text, "html.parser", from_encoding="utf-8")
+            soup = BeautifulSoup(response.text, "html.parser")
             keyDom = soup.select_one("#key-val")
 
             # 获取关键信息

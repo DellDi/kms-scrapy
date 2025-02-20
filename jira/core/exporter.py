@@ -8,8 +8,7 @@ from datetime import datetime
 from .config import config
 from .spider import JiraIssue
 
-# 配置日志
-logging.basicConfig(level=logging.INFO)
+# 获取当前模块的日志记录器
 logger = logging.getLogger(__name__)
 
 
