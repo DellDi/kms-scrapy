@@ -10,9 +10,8 @@ __version__ = "0.1.0"
 
 __all__ = [
     # API 客户端
-    'DifyClient',
-    'DifyAPIError',
-
+    "DifyClient",
+    "DifyAPIError",
     # 数据集管理
-    'DatasetManager'
+    "DatasetManager",
 ]

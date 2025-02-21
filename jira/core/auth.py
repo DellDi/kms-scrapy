@@ -120,6 +120,7 @@ class AuthManager:
         self,
         url: str,
         method: str = "GET",
+        params: Optional[Dict] = None,
         data: Optional[Union[Dict, str]] = None,
         **kwargs
     ) -> requests.Request:
@@ -159,6 +160,7 @@ class AuthManager:
             url=url,
             headers=headers,
             data=data,
+            params=params,
             **kwargs
         )
 

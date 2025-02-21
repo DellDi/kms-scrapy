@@ -5,16 +5,17 @@ Jira爬虫核心模块
 """
 
 from .auth import AuthManager, AuthError
-from .config import config
+from .config import SpiderConfig, config
 from .spider import JiraSpider, JiraIssue
 from .exporter import DocumentExporter, ExportError
 
 __all__ = [
-    'AuthManager',
-    'AuthError',
-    'config',
-    'JiraSpider',
-    'JiraIssue',
-    'DocumentExporter',
-    'ExportError',
+    "AuthManager",
+    "AuthError",
+    "config",
+    "JiraSpider",
+    "JiraIssue",
+    "DocumentExporter",
+    "ExportError",
+    "SpiderConfig",
 ]

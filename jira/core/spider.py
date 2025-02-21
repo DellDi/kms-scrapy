@@ -1,14 +1,14 @@
 import logging
-from typing import Dict, Optional, Generator, Any, Union
+from typing import Dict, Optional, Generator, Any, Union, List
 import json
 import requests
 from pydantic import BaseModel, Field
 from bs4 import BeautifulSoup
 from bs4.element import Tag
-from urllib.parse import urljoin, urlencode
+from urllib.parse import urljoin, urlencode, quote
 
 from .auth import AuthManager, AuthError
-from .config import config
+from .config import config, SpiderConfig
 from crawler.core.optimizer import OptimizerFactory
 
 # 获取当前模块的日志记录器
@@ -81,22 +81,33 @@ class ParseError(Exception):
 class JiraSpider:
     """Jira爬虫主类"""
 
-    def __init__(self, auth_manager: AuthManager):
+    def __init__(
+        self,
+        auth_manager: AuthManager,
+        spider_config: Optional[SpiderConfig] = None,
+    ):
         """
         初始化爬虫
-        
+
         Args:
             auth_manager: 认证管理器实例
+            spider_config: 爬虫配置，如果为None则使用默认配置
         """
         self.auth_manager = auth_manager
         self.optimizer = OptimizerFactory.create_optimizer()
         self.session = requests.Session()
+        self.config = spider_config or config.spider
+        logger.info(
+            f"Spider initialized with config: page_size={self.config.page_size}, "
+            f"start_at={self.config.start_at}, jql={self.config.jql}"
+        )
 
     def _make_request(
         self,
         url: str,
         method: str = "GET",
-        data: Optional[Dict] = None,
+        params: Optional[Dict] = None,
+        data: Optional[Union[Dict, str]] = None,
         retry_count: int = 0,
         **kwargs,
     ) -> requests.Response:
@@ -106,6 +117,7 @@ class JiraSpider:
         Args:
             url: 请求URL
             method: 请求方法
+            params: URL参数
             data: 请求数据
             retry_count: 当前重试次数
             **kwargs: 其他请求参数
@@ -119,9 +131,12 @@ class JiraSpider:
         """
         try:
             # 创建请求
-            data_str = urlencode(data) if data else None
             request = self.auth_manager.create_authenticated_request(
-                url=url, method=method, data=data_str, **kwargs
+                url=url,
+                method=method,
+                params=params,
+                data=data,
+                **kwargs
             )
 
             # 准备请求
@@ -132,7 +147,9 @@ class JiraSpider:
             logger.debug(f"Method: {method}")
             logger.debug(f"Headers: {json.dumps(dict(prepped.headers), indent=2)}")
             if data:
-                logger.debug(f"Data: {json.dumps(data, indent=2)}")
+                logger.debug(f"Data: {data}")
+            if params:
+                logger.debug(f"Params: {params}")
 
             # 发送请求
             response = self.session.send(prepped)
@@ -144,12 +161,13 @@ class JiraSpider:
                 logger.error(f"Response Content: {response.text}")
 
             # 检查是否需要认证
-            if response.status_code == 401 and retry_count < config.spider.retry_times:
+            if response.status_code == 401 and retry_count < self.config.retry_times:
                 logger.info("认证失败，尝试刷新认证")
                 if self.auth_manager.refresh_authentication():
                     return self._make_request(
-                        url=url, 
-                        method=method, 
+                        url=url,
+                        method=method,
+                        params=params,
                         data=data,
                         retry_count=retry_count + 1,
                         **kwargs
@@ -157,13 +175,14 @@ class JiraSpider:
 
             # 检查其他需要重试的状态码
             if (
-                response.status_code in config.spider.retry_http_codes
-                and retry_count < config.spider.retry_times
+                response.status_code in self.config.retry_http_codes
+                and retry_count < self.config.retry_times
             ):
                 logger.info(f"请求失败(状态码:{response.status_code})，正在重试({retry_count + 1})")
                 return self._make_request(
                     url=url,
                     method=method,
+                    params=params,
                     data=data,
                     retry_count=retry_count + 1,
                     **kwargs
@@ -173,55 +192,43 @@ class JiraSpider:
             return response
 
         except requests.RequestException as e:
-            if retry_count < config.spider.retry_times:
+            if retry_count < self.config.retry_times:
                 logger.warning(f"请求异常，正在重试({retry_count + 1}): {str(e)}")
                 return self._make_request(
                     url=url,
                     method=method,
+                    params=params,
                     data=data,
                     retry_count=retry_count + 1,
                     **kwargs
                 )
             raise
 
-    def get_issue_table(self, start_index: int = 0) -> tuple[str, Dict[str, Any]]:
+    def get_issue_table(self, start_at: int = 0) -> tuple[List[str], Dict[str, Any]]:
         """
-        获取问题列表表格
+        获取问题列表数据
 
         Args:
-            start_index: 起始索引
+            start_at: 起始索引
 
         Returns:
-            tuple[str, dict]: (表格HTML内容, 分页信息)
+            tuple[list[str], dict]: (问题key列表, 分页信息)
         """
-        url = f"{config.spider.base_url}/rest/issueNav/1/issueTable"
-        data = {
-            "startIndex": start_index,
-            "filterId": 37131,
-            "jql": (
-                "project in (PMS, V10) AND "
-                "created >= 2024-01-01 AND "
-                "resolved <= 2025-01-01 "
-                "ORDER BY created ASC"
-            ),
-            "layoutKey": "list-view",
-        }
+        url = f"{self.config.base_url}/rest/api/2/search"
 
         # 发送请求
         response = self._make_request(
             url=url,
-            method="POST",
-            data=data,
+            method="GET",
+            params={
+                "startAt": start_at,
+                "jql": self.config.jql,
+                "maxResults": self.config.page_size,
+                "fields": "key",
+            },
             headers={
-                **config.spider.default_headers,  # 使用公共headers
-                # 列表接口特定headers
-                "Accept": "*/*",
-                "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-                "Origin": config.spider.base_url,
-                "Referer": f"{config.spider.base_url}/issues/?filter=37131",
-                "X-Atlassian-Token": "no-check",
-                "X-Requested-With": "XMLHttpRequest",
-                "__amdModuleName": "jira/issue/utils/xsrf-token-header",
+                **self.config.default_headers,
+                "Accept": "application/json",
             },
         )
 
@@ -233,14 +240,30 @@ class JiraSpider:
                 logger.debug(f"Response content: {response.text}")
                 raise ParseError("Response is not a JSON object")
 
-            issue_table = result.get("issueTable", "")
-            pagination = result.get("pagination", {})
-
-            if not issue_table:
-                logger.warning("Empty issue table in response")
+            # 获取issues列表和分页信息
+            issues = result.get("issues", [])  # issues直接在根级别
+            start_at = result.get("startAt", 0)
+            max_results = result.get("maxResults", self.config.page_size)
+            total = result.get("total", 0)
+            pagination = {
+                "total": total,
+                "startAt": start_at,
+                "maxResults": max_results,
+                "next": (start_at + max_results) < total
+            }
+            if not issues:
+                logger.warning("Empty issues list in response")
                 logger.debug(f"Full response: {json.dumps(result, indent=2)}")
+                return [], pagination
 
-            return issue_table, pagination
+            # 提取issue keys
+            issue_keys = []
+            for issue in issues:
+                if issue_key := issue.get("key"):
+                    issue_keys.append(issue_key)
+                    logger.debug(f"Found issue key: {issue_key}")
+
+            return issue_keys, pagination
 
         except json.JSONDecodeError as e:
             logger.error(f"JSON解析失败: {str(e)}")
@@ -250,44 +273,6 @@ class JiraSpider:
             logger.error(f"解析响应失败: {str(e)}")
             logger.debug(f"Response content: {response.text[:1000]}...")
             raise ParseError("解析问题列表响应失败") from e
-
-    def parse_issue_table(self, html: str) -> Generator[str, None, None]:
-        """
-        解析问题列表表格
-
-        Args:
-            html: 表格HTML内容
-
-        Yields:
-            str: 问题详情页URL
-        """
-        if not html:
-            logger.warning("空的HTML内容")
-            return
-
-        try:
-            soup = BeautifulSoup(html, "html.parser")
-            logger.debug(f"解析HTML内容: {len(html)} 字符")
-
-            rows = soup.select("tr")
-            if not rows:
-                logger.warning("未找到表格行")
-                logger.debug(f"HTML内容: {html[:500]}...")
-                return
-
-            for row in rows:
-                issue_key_cell = row.select_one("td.issuekey")
-                if issue_key_cell:
-                    issue_link = issue_key_cell.select_one("a")
-                    if issue_link and issue_link.get("href"):
-                        url = urljoin(config.spider.base_url, issue_link["href"])
-                        logger.debug(f"找到问题链接: {url}")
-                        yield url
-
-        except Exception as e:
-            logger.error(f"解析问题表格失败: {str(e)}")
-            logger.debug(f"HTML内容: {html[:500]}...")
-            raise ParseError("解析问题表格失败") from e
 
     def get_issue_detail(self, url: str) -> JiraIssue:
         """
@@ -303,7 +288,7 @@ class JiraSpider:
         response = self._make_request(
             url=url,
             headers={
-                **config.spider.default_headers,  # 使用公共headers
+                **self.config.default_headers,  # 使用公共headers
                 # 详情页特定headers
                 "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
                 "Accept-Encoding": "gzip, deflate",
@@ -330,7 +315,7 @@ class JiraSpider:
                 id = str(rel_value[0]) if isinstance(rel_value, list) else str(rel_value)
 
             # 需求单地址
-            link = f"{config.spider.base_url}/browse/{key}"
+            link = f"{self.config.base_url}/browse/{key}"
 
             # 提取基本字段
             issue_data = {
@@ -356,7 +341,9 @@ class JiraSpider:
 
             # 优化内容
             if issue_data["description"]:
-                issue_data["optimized_content"] = self.optimizer.optimize(issue_data["description"], strip=True)
+                issue_data["optimized_content"] = self.optimizer.optimize(
+                    issue_data["description"], strip=True
+                )
 
             # 记录日志
             for key, value in issue_data.items():
@@ -379,32 +366,34 @@ class JiraSpider:
         Yields:
             JiraIssue: 问题数据对象
         """
-        start_index = 0
+        start_index = self.config.start_at
 
         while True:
             try:
                 # 获取问题列表
                 logger.info(f"获取问题列表，起始索引: {start_index}")
-                issue_table, pagination = self.get_issue_table(start_index)
-                table_html = issue_table["table"]
-                # 解析问题链接
-                for issue_url in self.parse_issue_table(table_html):
+                issue_keys, pagination = self.get_issue_table(start_index)
+
+                # 获取每个问题的详情
+                for key in issue_keys:
                     try:
-                        logger.info(f"处理问题: {issue_url}")
-                        # 获取问题详情
-                        issue = self.get_issue_detail(issue_url)
+                        url = f"{self.config.base_url}/browse/{key}"
+                        logger.info(f"处理问题: {url}")
+                        issue = self.get_issue_detail(url)
                         yield issue
                     except Exception as e:
-                        logger.error(f"处理问题详情失败({issue_url}): {str(e)}")
+                        logger.error(f"处理问题详情失败({key}): {str(e)}")
                         continue
 
                 # 检查是否还有下一页
-                if not pagination.get("next"):
-                    logger.info("已到达最后一页")
+                if pagination.get("startAt", 0) + pagination.get(
+                    "maxResults", self.config.page_size
+                ) >= pagination.get("total", 0):
+                    logger.info("没有更多问题，爬虫结束")
                     break
 
                 # 更新起始索引
-                start_index = pagination.get("start", 0) + pagination.get("max", 50)
+                start_index += pagination.get("maxResults", self.config.page_size)
                 logger.info(f"处理下一页，新的起始索引: {start_index}")
 
             except Exception as e:

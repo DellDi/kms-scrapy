@@ -68,6 +68,8 @@ class DocumentExporter:
             str: 格式化后的Markdown内容
         """
         # 使用textwrap.dedent保持正确的缩进
+        ## 优化后的内容
+        # {issue.optimized_content or "（无优化内容）"}
         template = textwrap.dedent(
             f"""
 # {issue.summary}
@@ -88,10 +90,6 @@ class DocumentExporter:
 ## 问题描述
 
 {issue.description}
-
-## 优化后的内容
-
-{issue.optimized_content or "（无优化内容）"}
 
 ## 附件内容
 {issue.annex_str or "（无附件内容）"}
@@ -123,7 +121,7 @@ class DocumentExporter:
             raise ExportError(f"写入文件失败: {str(e)}")
 
     def export_issue(
-            self, issue: JiraIssue, page_num: int, overwrite: bool = True
+        self, issue: JiraIssue, page_num: int, overwrite: bool = True
     ) -> Optional[Tuple[str, str]]:
         """
         导出单个问题到Markdown文件
@@ -159,7 +157,7 @@ class DocumentExporter:
             return None
 
     def batch_export(
-            self, issues: List[JiraIssue], page_num: int, max_workers: int = 4
+        self, issues: List[JiraIssue], page_num: int, max_workers: int = 4
     ) -> List[Tuple[str, str]]:
         """
         批量导出问题

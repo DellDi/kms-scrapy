@@ -4,22 +4,25 @@ Jira爬虫主程序
 
 import logging
 import sys
+import os
+import argparse
 from typing import Optional
 from datetime import datetime
-import os
 
 from jira.core import (
     JiraSpider,
     DocumentExporter,
     AuthManager,
     AuthError,
-    ExportError
+    ExportError,
+    SpiderConfig,
+    config
 )
 
 def setup_logging():
     """配置日志"""
     # 创建logs目录（如果不存在）
-    log_dir = "logs"
+    log_dir = "logs-jira"
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
 
@@ -55,8 +58,32 @@ def setup_logging():
 
     return logging.getLogger(__name__)
 
-# 配置日志
-logger = setup_logging()
+def parse_args():
+    """解析命令行参数"""
+    parser = argparse.ArgumentParser(description="JIRA问题爬虫")
+    
+    parser.add_argument(
+        "--page-size",
+        type=int,
+        default=config.spider.page_size,
+        help=f"每页数量 (默认: {config.spider.page_size})"
+    )
+    
+    parser.add_argument(
+        "--start-at",
+        type=int,
+        default=config.spider.start_at,
+        help=f"起始位置 (默认: {config.spider.start_at})"
+    )
+    
+    parser.add_argument(
+        "--jql",
+        type=str,
+        default=config.spider.jql,
+        help="JQL查询条件"
+    )
+
+    return parser.parse_args()
 
 def run_spider(clear_output: bool = True) -> Optional[bool]:
     """
@@ -69,13 +96,26 @@ def run_spider(clear_output: bool = True) -> Optional[bool]:
         Optional[bool]: 执行是否成功，出错返回None
     """
     try:
+        # 解析命令行参数
+        args = parse_args()
+
+        # 创建爬虫配置
+        spider_config = SpiderConfig(
+            **{
+                **config.spider.__dict__,  # 复制默认配置
+                "page_size": args.page_size,
+                "start_at": args.start_at,
+                "jql": args.jql,
+            }
+        )
+
         # 初始化认证管理器
         auth_manager = AuthManager()
-        
+
         # 检查认证状态
         logger.info("检查认证状态...")
         auth_valid = auth_manager.check_authentication()
-        
+
         if not auth_valid:
             # 认证失败，尝试刷新认证
             logger.info("认证已失效，尝试刷新认证...")
@@ -86,7 +126,7 @@ def run_spider(clear_output: bool = True) -> Optional[bool]:
             logger.info("认证刷新成功，继续执行...")
 
         # 初始化爬虫和导出器
-        spider = JiraSpider(auth_manager)
+        spider = JiraSpider(auth_manager, spider_config)
         exporter = DocumentExporter()
 
         # 清空输出目录
@@ -108,8 +148,8 @@ def run_spider(clear_output: bool = True) -> Optional[bool]:
             total_issues += 1
             current_page_issues.append(issue)
 
-            # 每50个问题作为一页
-            if len(current_page_issues) >= 50:
+            # 每page_size个问题作为一页
+            if len(current_page_issues) >= spider_config.page_size:
                 logger.info(f"导出第 {current_page} 页问题...")
                 results = exporter.batch_export(current_page_issues, current_page)
                 successful_exports += len(results)
@@ -129,14 +169,14 @@ def run_spider(clear_output: bool = True) -> Optional[bool]:
         duration = end_time - start_time
 
         # 输出统计信息
-        logger.info("-" * 50)
+        logger.info("-" * spider_config.page_size)
         logger.info("爬虫执行完成!")
         logger.info(f"总问题数: {total_issues}")
         logger.info(f"成功导出: {successful_exports}")
         logger.info(f"失败数量: {total_issues - successful_exports}")
         logger.info(f"总页数: {current_page}")
         logger.info(f"执行时间: {duration}")
-        logger.info("-" * 50)
+        logger.info("-" * spider_config.page_size)
 
         return successful_exports > 0
 
@@ -155,6 +195,9 @@ def run_spider(clear_output: bool = True) -> Optional[bool]:
     except Exception as e:
         logger.error(f"执行出错: {str(e)}")
         return None
+
+# 配置日志
+logger = setup_logging()
 
 def main():
     """主函数"""

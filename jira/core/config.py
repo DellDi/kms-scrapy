@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Dict, List
+from datetime import datetime
 
 @dataclass
 class AuthConfig:
@@ -16,6 +17,16 @@ class SpiderConfig:
     concurrent_requests: int = 1
     retry_times: int = 3
     retry_http_codes: List[int] = field(default_factory=lambda: [500, 502, 503, 504, 400])
+    
+    # 查询参数
+    page_size: int = 500  # 每页数量
+    start_at: int = 0  # 起始位置
+    jql: str = (  # JQL查询条件
+        "project in (PMS, V10) AND "
+        "created >= 2024-01-01 AND "
+        "resolved <= 2025-01-01 "
+        "ORDER BY created ASC"
+    )
 
     # 默认请求头
     default_headers: Dict[str, str] = field(
