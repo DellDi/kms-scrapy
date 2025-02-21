@@ -169,14 +169,14 @@ def run_spider(clear_output: bool = True) -> Optional[bool]:
         duration = end_time - start_time
 
         # 输出统计信息
-        logger.info("-" * spider_config.page_size)
+        logger.info("-" * 100)
         logger.info("爬虫执行完成!")
         logger.info(f"总问题数: {total_issues}")
         logger.info(f"成功导出: {successful_exports}")
         logger.info(f"失败数量: {total_issues - successful_exports}")
         logger.info(f"总页数: {current_page}")
         logger.info(f"执行时间: {duration}")
-        logger.info("-" * spider_config.page_size)
+        logger.info("-" * 100)
 
         return successful_exports > 0
 
