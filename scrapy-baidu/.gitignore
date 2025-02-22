@@ -18,13 +18,13 @@ var/
 wheels/
 *.egg-info/
 .installed.cfg
-.scrapy/
 *.egg
 
 # Virtual Environment
 venv/
 env/
 ENV/
+.env
 
 # IDE
 .idea/
@@ -32,13 +32,16 @@ ENV/
 *.swp
 *.swo
 
+# Scrapy stuff
+.scrapy
+httpcache/
+
 # Project specific
 output/
-output-kms/
-output-jira/
+logs/
 *.log
-.env
+metadata.json
 
-# OS
+# OS specific
 .DS_Store
 Thumbs.db
