@@ -1,9 +1,9 @@
-"""
-知识库管理模块
+"""知识库管理模块
 负责知识库（数据集）的创建和管理
 """
 import os
 import re
+import logging
 from typing import Dict, List, Optional, Any
 from ..api.client import DifyClient, DifyAPIError
 
@@ -22,6 +22,7 @@ class DatasetManager:
         self.max_docs = max_docs
         self._current_dataset = None
         self._dataset_number = 0
+        self.logger = logging.getLogger(__name__)
 
     def initialize(self) -> Dict:
         """
@@ -32,44 +33,45 @@ class DatasetManager:
             Dict: 当前使用的数据集信息
         """
         try:
-            print("开始获取数据集列表...")
+            self.logger.info("开始获取数据集列表...111")
             # 获取数据集列表
             response = self.client.list_datasets()
+
             datasets = response.get('data', [])
-            print(f"找到 {len(datasets)} 个数据集")
+            self.logger.info(f"找到 {len(datasets)} 个数据集")
 
             if not datasets:
-                print("没有找到数据集，创建第一个...")
+                self.logger.info("没有找到数据集，创建第一个...")
                 # 没有数据集，创建第一个
                 self._dataset_number = 1
                 self._current_dataset = self._create_dataset()
-                print(f"已创建新数据集: {self._current_dataset['name']}")
+                self.logger.info(f"已创建新数据集: {self._current_dataset['name']}")
             else:
-                print("处理现有数据集...")
+                self.logger.info("处理现有数据集...")
                 # 找到最新的数据集
                 latest_dataset, number = self._get_latest_dataset(datasets)
                 self._dataset_number = number
 
                 if latest_dataset:
-                    print(f"找到最新数据集: {latest_dataset['name']}")
+                    self.logger.info(f"找到最新数据集: {latest_dataset['name']}")
                     # 获取最新数据集的文档列表
                     docs_response = self.client.list_documents(latest_dataset["id"])
                     doc_count = docs_response.get('total', 0)
-                    print(f"当前数据集文档数量: {doc_count}/{self.max_docs}")
+                    self.logger.info(f"当前数据集文档数量: {doc_count}/{self.max_docs}")
 
                     if doc_count >= self.max_docs:
-                        print("数据集已满，创建新数据集...")
+                        self.logger.info("数据集已满，创建新数据集...")
                         # 创建新数据集
                         self._dataset_number += 1
                         self._current_dataset = self._create_dataset()
-                        print(f"已创建新数据集: {self._current_dataset['name']}")
+                        self.logger.info(f"已创建新数据集: {self._current_dataset['name']}")
                     else:
                         self._current_dataset = latest_dataset
                 else:
-                    print("没有找到有效数据集，创建新数据集...")
+                    self.logger.info("没有找到有效数据集，创建新数据集...")
                     self._dataset_number = 1
                     self._current_dataset = self._create_dataset()
-                    print(f"已创建新数据集: {self._current_dataset['name']}")
+                    self.logger.info(f"已创建新数据集: {self._current_dataset['name']}")
 
             return self._current_dataset
 
@@ -201,7 +203,7 @@ class DatasetManager:
                 # 创建新数据集
                 self._dataset_number += 1
                 self._current_dataset = self._create_dataset()
-                print(f"创建新数据集: {self._current_dataset['name']}")
+                self.logger.info(f"创建新数据集: {self._current_dataset['name']}")
 
             try:
                 # 上传文件
@@ -212,8 +214,8 @@ class DatasetManager:
                     process_rule
                 )
                 results.append(result)
-                print(f"成功上传文件: {os.path.basename(file_path)}")
+                self.logger.info(f"成功上传文件: {os.path.basename(file_path)}")
             except Exception as e:
-                print(f"上传文件失败 {os.path.basename(file_path)}: {str(e)}")
+                self.logger.info(f"上传文件失败 {os.path.basename(file_path)}: {str(e)}")
 
         return results
