@@ -126,7 +126,7 @@ def run_spider(clear_output: bool = True) -> Optional[bool]:
             logger.info("认证刷新成功，继续执行...")
 
         # 初始化爬虫和导出器
-        spider = JiraSpider(auth_manager, spider_config)
+        spider = JiraSpider(auth_manager)
         exporter = DocumentExporter()
 
         # 清空输出目录
