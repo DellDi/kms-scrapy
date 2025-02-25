@@ -3,25 +3,18 @@ from scrapy.http import Request, FormRequest
 import base64
 from .config import config
 
+
 class AuthManager:
-    """认证管理器，处理所有与认证相关的逻辑"""
+    """认证管理器，处理所有与认证相关的逻辑 (简化版，利用 Scrapy 自动 cookie 管理)"""
 
-    # 存储全局cookie
-    _cookies: Dict[str, str] = {}
+    """首先调用create_login_request 方法创建登录请求，然后调用handle_login_response 方法处理登录响应，最后调用get_auth_headers 方法获取包含Basic认证的请求头。"""
 
-    @classmethod
-    def update_cookies(cls, new_cookies: Dict[str, str]) -> None:
-        """更新全局cookie存储"""
-        cls._cookies.update(new_cookies)
-
-    @classmethod
-    def get_cookies(cls) -> Dict[str, str]:
-        """获取当前存储的cookie"""
-        return cls._cookies.copy()
+    def __init__(self, meta):
+        self.create_login_request(meta)
 
     @staticmethod
-    def get_auth_headers(cookies: Dict[str, str] = None) -> Dict[str, str]:
-        """获取包含Basic认证的请求头"""
+    def get_auth_headers() -> Dict[str, str]:
+        """获取包含Basic认证的请求头 (简化版，不再手动处理 Cookie)"""
         auth_str = f'Basic {base64.b64encode(f"{config.auth.basic_auth_user}:{config.auth.basic_auth_pass}".encode()).decode()}'
         headers = {
             "Authorization": auth_str,
@@ -31,16 +24,11 @@ class AuthManager:
             "Upgrade-Insecure-Requests": "1",
             "User-Agent": config.spider.default_headers["User-Agent"],
         }
-
-        # 优先使用传入的cookies，如果没有则使用存储的cookies
-        cookies = cookies or AuthManager._cookies
-        if cookies:
-            headers["Cookie"] = "; ".join(f"{k}={v}" for k, v in cookies.items())
         return headers
 
     @staticmethod
-    def create_login_request(response, callback, meta: Dict[str, Any]) -> FormRequest:
-        """创建登录请求"""
+    def create_login_request(meta) -> FormRequest:
+        """创建登录请求 (简化版，依赖 Scrapy 自动处理 Cookie)"""
         target_url = meta.get("original_url", config.spider.start_urls[0])
         formdata = {
             "os_username": config.auth.username,
@@ -49,35 +37,32 @@ class AuthManager:
             "os_destination": target_url,
             "login": "登录",
         }
-        # 直接构造登录请求
+        # 直接构造登录请求，不再显式传递 cookies，Scrapy 会自动处理
         return FormRequest(
-            url=response.urljoin("/dologin.action"),
+            # url=target_url.urljoin("/dologin.action"),
+            url=target_url.join("/dologin.action"),
             method="POST",
             formdata=formdata,
             headers={
                 **AuthManager.get_auth_headers(),
                 "Content-Type": "application/x-www-form-urlencoded",
-                "Referer": response.url,
+                "Referer": target_url,
             },
-            cookies=response.headers.getlist("Set-Cookie"),
-            callback=callback,
             dont_filter=True,
             meta={
-                "dont_merge_cookies": True,
                 "handle_httpstatus_list": [302],
                 "original_url": formdata["os_destination"],
             },
         )
 
     @staticmethod
-    def create_authenticated_request(
-        url: str, callback, meta: Dict[str, Any], cookies: Dict[str, str] = None
-    ) -> Request:
-        """创建带认证信息的请求"""
+    def create_authenticated_request(url: str, callback, meta: Dict[str, Any],**kwargs) -> Request:
+        """创建带认证信息的请求 (简化版，依赖 Scrapy 自动处理 Cookie)"""
         return Request(
             url,
             callback=callback,
-            headers=AuthManager.get_auth_headers(cookies),
+            headers=AuthManager.get_auth_headers(),  # 请求头中不再需要手动添加 Cookie，Scrapy 自动处理
             dont_filter=True,
             meta=meta,
+            **kwargs,
         )

@@ -1,6 +1,5 @@
 import os
 from bs4 import BeautifulSoup
-from scrapy.http import Request
 from urllib.parse import urlencode, parse_qs
 import logging
 import time
@@ -9,9 +8,9 @@ import time
 class TreeExtractor:
     """处理 Confluence 页面导航树提取的专用类"""
 
-    def __init__(self, common_headers_callback):
+    def __init__(self, auth_manager):
         self.logger = logging.getLogger(__name__)
-        self._get_common_headers = common_headers_callback
+        self.auth_manager = auth_manager
 
     def process_tree_container(self, response, soup):
         """处理页面中的导航树容器-第一次展开左侧标准树"""
@@ -58,16 +57,14 @@ class TreeExtractor:
             self.logger.info(f"获取到的导航树参数: {params}")
 
             # 构建并返回请求
-            headers = self._get_common_headers()
-            headers.update({"x-requested-with": "XMLHttpRequest"})
+            # headers = self._get_common_headers()
+            # headers.update({"x-requested-with": "XMLHttpRequest"})
 
-            return Request(
+            return self.auth_manager.create_authenticated_request(
                 url=tree_url,
                 callback=self.parse_tree_ajax,
-                headers=headers,
                 meta={
                     "original_url": response.url,
-                    "dont_merge_cookies": True,
                     "handle_httpstatus_list": [302, 200],
                     "depth_info": {
                         "current_depth": 0,
@@ -107,8 +104,8 @@ class TreeExtractor:
         tree_url = response.urljoin("/plugins/pagetree/naturalchildren.action")
         tree_url = f"{tree_url}?{urlencode(params)}"
 
-        headers = self._get_common_headers()
-        headers.update({"x-requested-with": "XMLHttpRequest"})
+        # headers = self.auth_manager.get_auth_headers()
+        # headers.update({"x-requested-with": "XMLHttpRequest"})
 
         this_depth_info = response.meta.get("depth_info", {})
         current_depth = this_depth_info.get("current_depth", 0)
@@ -131,13 +128,11 @@ class TreeExtractor:
         else:
             _parent_path = os.path.join(_parent_path, f"{current_depth:02d}-{current_title}")
 
-        return Request(
+        return self.auth_manager.create_authenticated_request(
             url=tree_url,
             callback=self.parse_tree_ajax,
-            headers=headers,
             meta={
                 "original_url": response.url,
-                "dont_merge_cookies": True,
                 "handle_httpstatus_list": [302, 200],
                 "is_expansion": True,  # 标记这是一个节点展开请求
                 "depth_info": {
@@ -248,14 +243,11 @@ class TreeExtractor:
                     os.path.join(parent_output_path, f"{current_depth:02d}-{title}")
                 )
 
-                headers = self._get_common_headers()
-                yield Request(
+                yield self.auth_manager.create_authenticated_request(
                     url=page_url,
                     callback=self.parse_content_callback,
-                    headers=headers,
                     dont_filter=True,
                     meta={
-                        "dont_merge_cookies": True,
                         "handle_httpstatus_list": [302, 200],
                         "depth_info": {
                             **depth_info,

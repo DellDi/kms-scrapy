@@ -5,7 +5,6 @@ import os
 
 load_dotenv()
 
-
 class AuthConfig(BaseModel):
     """认证配置"""
 

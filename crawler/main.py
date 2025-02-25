@@ -9,7 +9,7 @@ from datetime import datetime
 from scrapy.crawler import CrawlerProcess
 from scrapy.utils.project import get_project_settings
 from crawler.core.spider import ConfluenceSpider
-from .core.config import SpiderConfig
+from core.config import config
 
 def setup_logging():
     """配置日志"""
@@ -58,7 +58,7 @@ def main():
         logger.info("开始运行Confluence爬虫...")
 
         # 创建输出目录
-        output_dir = SpiderConfig.output_dir
+        output_dir = config.spider.output_dir
         logger.info(f"输出目录: {output_dir}")
 
         # 检查并清理旧的输出文件
@@ -99,13 +99,13 @@ def main():
         # 启动爬虫
         logger.info("开始爬取...")
         start_time = datetime.now()
-        
+
         process.start()
 
         # 计算执行时间
         end_time = datetime.now()
         duration = end_time - start_time
-        
+
         # 输出统计信息
         logger.info("-" * 50)
         logger.info("爬虫执行完成!")
