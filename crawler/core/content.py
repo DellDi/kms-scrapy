@@ -12,7 +12,6 @@ import pytesseract
 from pdf2image import convert_from_path
 import magic
 
-import requests
 from pydantic import BaseModel, Field
 
 class KMSItem(BaseModel):
@@ -35,15 +34,28 @@ class KMSItem(BaseModel):
 
 class ContentParser:
     """内容解析器，处理页面内容和附件"""
-    def __init__(self, enable_text_extraction: bool = True, content_optimizer = None):
+    def __init__(self, enable_text_extraction: bool = True, content_optimizer = None, auth_manager = None):
         """初始化解析器
 
         Args:
             enable_text_extraction: 是否启用文本提取功能，默认为False
             content_optimizer: 内容优化器实例，用于美化提取的文本
+            auth_manager: 认证管理器实例，用于处理认证请求
         """
         self.enable_text_extraction = enable_text_extraction
         self.content_optimizer = content_optimizer
+        self.auth_manager = auth_manager
+        self.logger = logging.getLogger(__name__)
+        self._spider_callback = None  # 存储Spider提供的回调函数
+
+    def set_callback(self, callback):
+        """设置Spider提供的回调函数
+        
+        Args:
+            callback: Spider中处理附件下载的回调函数
+        """
+        self._spider_callback = callback
+        self.logger.info("已设置Spider回调函数")
 
     @staticmethod
     def parse_page_content(html_content: str) -> tuple[str, str]:
@@ -104,54 +116,103 @@ class ContentParser:
             logging.warning(f'PPT文本提取失败: {str(e)}')
             return None
 
-    def process_attachment(self, file_url: str, headers: Dict[str, str]) -> Dict[str, Any]:
-        """处理附件，返回附件信息"""
-        file_response = requests.get(file_url, headers=headers)
-        if file_response.status_code != 200:
+    def handle_downloaded_file(self, response):
+        """处理下载完成的文件响应"""
+        self.logger.info(f"收到文件下载响应: {response.url}, 状态码: {response.status}")
+        
+        if response.status != 200:
+            self.logger.error(f"附件下载失败: {response.url}, 状态码: {response.status}")
             return None
-
-        file_type = magic.from_buffer(file_response.content, mime=True)
-        # 从URL中获取原始文件名，进行URL解码并去除URL参数
-        file_name = os.path.basename(file_url).split('?')[0]
-        file_name = urllib.parse.unquote(file_name)
-
-        # 如果URL中没有文件后缀，尝试从Content-Type获取
-        if '.' not in file_name:
-            content_type = file_response.headers.get('Content-Type', '')
-            ext = mimetypes.guess_extension(content_type)
-            if ext:
-                file_name = f'{file_name}{ext}'
-
-        temp_path = f'temp_{file_name}'
-
+            
+        temp_path = None
         try:
+            # 获取文件类型
+            file_type = magic.from_buffer(response.body, mime=True)
+            
+            # 处理文件名
+            file_name = os.path.basename(response.url).split('?')[0]
+            file_name = urllib.parse.unquote(file_name)
+            
+            # 处理文件后缀
+            if '.' not in file_name:
+                content_type = response.headers.get('Content-Type', '')
+                ext = mimetypes.guess_extension(content_type)
+                if ext:
+                    file_name = f'{file_name}{ext}'
+                    
+            # 创建临时文件
+            temp_path = f'temp_{file_name}'
             with open(temp_path, 'wb') as f:
-                f.write(file_response.content)
+                f.write(response.body)
 
+            # 处理文本提取
             text = None
             if self.enable_text_extraction:
-                if 'image' in file_type:
-                    text = self.process_image(temp_path)
-                elif 'pdf' in file_type:
-                    text = self.process_pdf(temp_path)
-                elif 'word' in file_type:
-                    text = self.process_word(temp_path)
-                elif 'powerpoint' in file_type:
-                    text = self.process_ppt(temp_path)
+                try:
+                    if 'image' in file_type:
+                        text = self.process_image(temp_path)
+                    elif 'pdf' in file_type:
+                        text = self.process_pdf(temp_path)
+                    elif 'word' in file_type:
+                        text = self.process_word(temp_path)
+                    elif 'powerpoint' in file_type:
+                        text = self.process_ppt(temp_path)
 
-                if text and self.content_optimizer:
-                    text = self.content_optimizer.optimize(text)
-                    # 将优化后的文本内容设置为Markdown格式
-                    file_type = 'text/markdown'
+                    if text and self.content_optimizer:
+                        text = self.content_optimizer.optimize(text)
+                        file_type = 'text/markdown'
+                except Exception as e:
+                    self.logger.error(f"文本提取失败: {str(e)}")
 
-            return {
-                'url': file_url,
+            result = {
+                'url': response.url,
                 'type': file_type,
                 'filename': file_name,
-                'content': file_response.content,
+                'content': response.body,
                 'extracted_text': text
             }
 
+            self.logger.info(f"附件处理完成: {file_name}")
+            return result
+
+        except Exception as e:
+            self.logger.error(f"附件处理失败: {str(e)}")
+            return None
+
         finally:
-            if os.path.exists(temp_path):
-                os.remove(temp_path)
+            if temp_path and os.path.exists(temp_path):
+                try:
+                    os.remove(temp_path)
+                except OSError as e:
+                    self.logger.error(f"清理临时文件失败: {str(e)}")
+                    
+    def process_attachment(self, file_url: str):
+        """处理附件
+        
+        Args:
+            file_url: 附件URL
+        
+        Returns:
+            Request: Scrapy请求对象，将由Spider执行
+        """
+        if not self.auth_manager:
+            self.logger.error("未提供auth_manager，无法处理附件下载")
+            return None
+            
+        self.logger.info(f"开始处理附件下载: {file_url}")
+        
+        # 创建下载请求
+        request = self.auth_manager.create_authenticated_request(
+            url=file_url,
+            # 默认使用handle_downloaded_file，但允许外部覆盖
+            callback=self._spider_callback or self.handle_downloaded_file,
+            meta={
+                'handle_httpstatus_list': [200],
+                'download_timeout': 180,  # 延长下载超时时间
+                'dont_retry': False,
+                'dont_merge_cookies': False,
+                'is_attachment': True  # 标记这是附件下载请求
+            }
+        )
+        
+        return request  # 返回请求对象，由Spider处理执行

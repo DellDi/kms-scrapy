@@ -25,10 +25,14 @@ class ConfluenceSpider(scrapy.Spider):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.start_urls = [kwargs.get("start_url", "http://kms.new-see.com:8090")]
-        self.auth_manager = AuthManager({"meta": {"original_url": self.start_urls[0]}})
+        self.auth_manager = AuthManager({"original_url": self.start_urls[0]})
         self.content_parser = ContentParser(
-            enable_text_extraction=False, content_optimizer=OptimizerFactory.create_optimizer()
+            enable_text_extraction=False,
+            content_optimizer=OptimizerFactory.create_optimizer(),
+            auth_manager=self.auth_manager
         )
+        # 设置回调函数
+        self.content_parser.set_callback(self._handle_attachment_download)
         self.baichuan_config = {
             "api_key": config.baichuan.api_key,
             "api_url": config.baichuan.api_url,
@@ -36,12 +40,17 @@ class ConfluenceSpider(scrapy.Spider):
         self.tree_extractor = TreeExtractor(self.auth_manager)  # 初始化树结构提取器
 
     def start_requests(self):
-        for url in self.start_urls:
-            yield self.auth_manager.create_authenticated_request(
-                url,
-                callback=self.parse,
-                meta={"handle_httpstatus_list": [302, 200]},
-            )
+        """首先发送登录请求，登录成功后再开始抓取"""
+        # 创建登录请求
+        login_request = self.auth_manager._create_login_request(
+            {"original_url": self.start_urls[0]},
+            original_callback=self.parse  # 登录成功后调用parse方法
+        )
+        if login_request:
+            self.logger.info("开始登录流程...")
+            yield login_request
+        else:
+            self.logger.error("创建登录请求失败")
 
     def parse(self, response):
         # 处理内容页面
@@ -127,20 +136,38 @@ class ConfluenceSpider(scrapy.Spider):
 
         # 处理附件
         attachments = []
-        # 选择具有data-linked-resource-type='attachment'属性的元素
+        pending_downloads = []
+        
+        # 获取页面中的所有附件链接
         for attachment in soup.select('#main-content [data-linked-resource-type="attachment"]'):
-            # 根据元素类型获取附件链接
+            file_url = None
             if attachment.name == "img":
                 file_url = response.urljoin(attachment.get("src", ""))
             else:  # a标签
                 file_url = response.urljoin(attachment.get("href", ""))
-
-            if file_url:  # 只处理有效的URL
-                attachment_info = self.content_parser.process_attachment(
-                    file_url, self._get_common_headers()
-                )
-                if attachment_info:
-                    attachments.append(attachment_info)
+                
+            if not file_url:
+                continue
+                
+            # 创建下载请求
+            download_request = self.content_parser.process_attachment(file_url)
+            if download_request:
+                # 将当前信息保存到请求的meta中
+                download_request.meta.update({
+                    "current_attachments": attachments,
+                    "current_title": title,
+                    "current_content": content.get_text(),
+                    "depth_info": response.meta.get("depth_info", {}),
+                    "original_response": response,
+                })
+                pending_downloads.append(download_request)
+                
+        # 如果有待下载的附件，先处理它们
+        if pending_downloads:
+            self.logger.info(f"开始下载{len(pending_downloads)}个附件")
+            for request in pending_downloads:
+                yield request
+            return
 
         # 使用百川API优化内容
         optimized_content = self.optimize_content(content.get_text())
@@ -167,6 +194,55 @@ class ConfluenceSpider(scrapy.Spider):
         yield {
             "title": title,
             "url": response.url,
+            "markdown_path": markdown_path,
+            "attachments_dir": attachments_dir if attachments else None,
+            "attachments_count": len(attachments),
+            "timestamp": datetime.now().isoformat(),
+            "status": "success",
+        }
+        
+    def _handle_attachment_download(self, response):
+        """处理附件下载完成的回调
+        
+        从response.meta中获取原始信息，处理下载结果，
+        如果是最后一个附件，则继续处理文档导出
+        """
+        if not response.meta.get("is_attachment"):
+            return
+            
+        # 获取保存的上下文信息
+        attachments = response.meta.get("current_attachments", [])
+        title = response.meta.get("current_title")
+        content = response.meta.get("current_content")
+        depth_info = response.meta.get("depth_info", {})
+        original_response = response.meta.get("original_response")
+        
+        # 处理下载结果
+        attachment_info = self.content_parser.handle_downloaded_file(response)
+        if attachment_info:
+            attachments.append(attachment_info)
+            
+        # 优化内容
+        optimized_content = self.optimize_content(content)
+        
+        # 创建文档并导出
+        kms_item = KMSItem(
+            title=title,
+            content=optimized_content,
+            attachments=attachments,
+            depth_info=depth_info,
+        )
+        
+        exporter = DocumentExporter()
+        markdown_path, attachments_dir = exporter.export(kms_item)
+        
+        self.logger.info(f"已保存文档：{markdown_path}")
+        self.logger.info(f"附件保存在：{attachments_dir}" if attachments else "无附件")
+        
+        # yield结果给管道
+        yield {
+            "title": title,
+            "url": original_response.url,
             "markdown_path": markdown_path,
             "attachments_dir": attachments_dir if attachments else None,
             "attachments_count": len(attachments),

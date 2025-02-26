@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 import textwrap
 import json
 import requests
+import html2text
 from typing import Optional, Generator, Dict, Any, Union
 from .config import config
 
@@ -360,12 +361,49 @@ class OpenAICompatibleOptimizer(ContentOptimizer):
             return content
 
 
+class HTMLToMarkdownOptimizer(ContentOptimizer):
+    """使用html2text库的内容优化器实现"""
+    
+    def __init__(self):
+        self.h = html2text.HTML2Text()
+        self.h.body_width = 0  # 不限制行宽
+        self.h.ignore_links = False
+        self.h.ignore_images = False
+        self.h.ignore_emphasis = False
+        self.h.ignore_tables = False
+        self.h.ul_item_mark = "-"  # 设置无序列表标记
+        self.h.emphasis_mark = "*"  # 设置强调标记
+        
+    def optimize(self, content: str, stream: bool = False, strip=False) -> str:
+        """将HTML内容转换为Markdown格式
+        
+        Args:
+            content: HTML内容
+            stream: 不使用
+            strip: 是否去除前导空白
+            
+        Returns:
+            str: Markdown格式的文本
+        """
+        try:
+            # 转换HTML为Markdown
+            markdown = self.h.handle(content)
+            
+            # 如果需要去除前导空白
+            if strip:
+                markdown = textwrap.dedent(markdown)
+                
+            return markdown
+        except Exception as e:
+            print(f"HTML转Markdown失败: {str(e)}")
+            return content
+
 class OptimizerFactory:
     """优化器工厂类"""
 
     @staticmethod
     def create_optimizer(
-        optimizer_type: str = "xunfei",
+        optimizer_type: str = "html2md",  # 修改默认值为html2md
         api_key: Optional[str] = None,
         api_url: Optional[str] = None,
         model: Optional[str] = None,
@@ -385,18 +423,23 @@ class OptimizerFactory:
             ContentOptimizer: 优化器实例
         """
         optimizers = {
+            "html2md": HTMLToMarkdownOptimizer,  # 添加HTML转Markdown优化器
             "baichuan": BaichuanOptimizer,
             "xunfei": XunfeiOptimizer,
             "compatible": OpenAICompatibleOptimizer,
         }
 
-        optimizer_class = optimizers.get(optimizer_type)
+        optimizer_class = optimizers.get(optimizer_type.lower())
         if not optimizer_class:
-            raise ValueError(f"不支持的优化器类型: {optimizer_type}")
+            # 如果类型不支持，使用默认的html2md
+            self.logger.warning(f"不支持的优化器类型: {optimizer_type}，使用默认的html2md优化器")
+            return HTMLToMarkdownOptimizer()
 
         if optimizer_type == "compatible":
             if not api_key or not api_url:
                 raise ValueError("compatible 优化器需要提供 api_key 和 api_url")
             return optimizer_class(api_key, api_url, model or "default")
-
-        return optimizer_class(api_key, api_url)
+        elif optimizer_type == "html2md":
+            return optimizer_class()
+        else:
+            return optimizer_class(api_key, api_url)

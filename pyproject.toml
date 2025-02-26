@@ -24,6 +24,7 @@ dependencies = [
     "nest-asyncio>=1.5.8",
     "python-magic-bin>=0.4.14; platform_system == 'Windows'",
     "colorama>=0.4.6",    # 添加彩色日志支持
+    "html2text>=2024.2.26",  # HTML转Markdown支持
 ]
 
 windows = ["python-magic-bin>=0.4.14"]
@@ -54,3 +55,4 @@ line_length = 100
 
 [tool.hatch.build.targets.wheel]
 packages = ["crawler", "jira", "dify", "scrapy-baidu"]
+

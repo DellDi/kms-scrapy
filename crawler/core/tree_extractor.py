@@ -73,7 +73,6 @@ class TreeExtractor:
                         "_parent_path": "",
                     },
                 },
-                dont_filter=True,
             )
 
         except Exception as e:
@@ -144,7 +143,6 @@ class TreeExtractor:
                     "_parent_path": output_path,
                 },
             },
-            dont_filter=True,
         )
 
     def parse_tree_ajax(self, response):
@@ -246,7 +244,6 @@ class TreeExtractor:
                 yield self.auth_manager.create_authenticated_request(
                     url=page_url,
                     callback=self.parse_content_callback,
-                    dont_filter=True,
                     meta={
                         "handle_httpstatus_list": [302, 200],
                         "depth_info": {
