@@ -1,4 +1,5 @@
 import logging
+import html2text
 from typing import Dict, Optional, Generator, Any, Union, List
 import json
 import os
@@ -31,6 +32,7 @@ SELECTORS = {
     "priority": "#priority-val",
     "type": "#type-val",
     "attachments": "#attachmentmodule .attachment-content .attachment-title",
+    "comments": ".issue-data-block",
 }
 
 
@@ -52,6 +54,7 @@ class JiraIssue(BaseModel):
     priority: str = Field(None, description="优先级")
     labels: list = Field(default_factory=list, description="标签列表")
     annex_str: str = Field("", description="附件列表Markdown格式")
+    comments_str: str = Field("", description="评论列表Markdown格式")
     annex_urls: List[Dict[str, str]] = Field(default_factory=list, description="附件URL列表")
     optimized_content: Optional[str] = Field(None, description="优化后的内容")
 
@@ -346,9 +349,22 @@ class JiraSpider:
             },
         )
 
+        # 获取评论接口响应，和原始明细接口保持一致，但请求头不一样
+        response_comment = self._make_request(
+            url=url,
+            headers={
+                **config.spider.default_headers,  # 使用公共headers
+                # 评论接口特定headers
+                "Accept": "*/*",
+                "X-PJAX": "true",
+                "X-Requested-With": "XMLHttpRequest",
+            },
+        )
+
         try:
             soup = BeautifulSoup(response.text, "html.parser")
             keyDom = soup.select_one("#key-val")
+            soup_comment = BeautifulSoup(response_comment.text, "html.parser")
 
             # 获取关键信息
             key = extract_value(soup, SELECTORS["key"])
@@ -374,7 +390,7 @@ class JiraSpider:
                 "description": extract_value(soup, SELECTORS["description"]),
                 "customer_name": extract_value(soup, SELECTORS["customer_name"]),
                 "created_date": extract_value(soup, SELECTORS["created_date"], "datetime"),
-                "resolved_date": extract_value(soup, SELECTORS["resolved_date"], "datetime"),
+                "resolved_date": extract_value(soup, SELECTORS["resolved_date"], "datetime", ""),
                 "reporter": extract_value(soup, SELECTORS["reporter"]),
                 "assignee": extract_value(soup, SELECTORS["assignee"]),
                 "status": extract_value(soup, SELECTORS["status"]),
@@ -404,6 +420,22 @@ class JiraSpider:
             issue_data["annex_str"] = "\n".join(attachments)
             issue_data["annex_urls"] = annex_urls
 
+            # 评论内容md格式
+            commentsDomList = soup_comment.select(SELECTORS["comments"])
+            # 只取文本的节点，不包含a标签
+            for dom in commentsDomList:
+                for a in dom.select("a"):
+                    a.decompose()
+
+            commentsDomList = [str(dom) for dom in commentsDomList]
+            commentsDom = "\n".join(commentsDomList)
+            if commentsDom:
+                # html2text 处理全部dom为md
+                comments_str = html2text.html2text(str(commentsDom))
+                issue_data["comments_str"] = comments_str
+
+            else:
+                issue_data["comments_str"] = "暂无评论内容"
             # 优化内容
             if issue_data["description"]:
                 issue_data["optimized_content"] = self.optimizer.optimize(

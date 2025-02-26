@@ -91,6 +91,10 @@ class DocumentExporter:
 
 {issue.description}
 
+## 评论完整记录
+
+{issue.comments_str}
+
 ## 附件内容
 {issue.annex_str or "（无附件内容）"}
 

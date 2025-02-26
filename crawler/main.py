@@ -89,7 +89,7 @@ def main():
         logger.info("已创建爬虫进程")
 
         # 添加爬虫 智慧数据-开始
-        start_url = "http://kms.new-see.com:8090/pages/viewpage.action?pageId=122356823"
+        start_url = "http://kms.new-see.com:8090/pages/viewpage.action?pageId=92012942"
         logger.info(f"添加爬虫任务: {start_url}")
         process.crawl(
             ConfluenceSpider,

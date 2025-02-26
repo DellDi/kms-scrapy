@@ -1,5 +1,4 @@
 version = 1
-revision = 1
 requires-python = ">=3.11"
 
 [[package]]
@@ -415,7 +414,6 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "beautifulsoup4" },
-    { name = "colorama" },
     { name = "html2text" },
     { name = "nest-asyncio" },
     { name = "pdf2image" },
@@ -444,7 +442,6 @@ dev = [
 requires-dist = [
     { name = "beautifulsoup4", specifier = ">=4.12.3" },
     { name = "black", marker = "extra == 'dev'", specifier = ">=23.0.0" },
-    { name = "colorama", specifier = ">=0.4.6" },
     { name = "flake8", marker = "extra == 'dev'", specifier = ">=6.0.0" },
     { name = "html2text", specifier = ">=2024.2.26" },
     { name = "isort", marker = "extra == 'dev'", specifier = ">=5.0.0" },
@@ -463,7 +460,6 @@ requires-dist = [
     { name = "requests", specifier = ">=2.31.0" },
     { name = "scrapy", specifier = ">=2.11.0" },
 ]
-provides-extras = ["dev"]
 
 [[package]]
 name = "lxml"

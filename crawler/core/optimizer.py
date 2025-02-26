@@ -1,8 +1,12 @@
 from abc import ABC, abstractmethod
+from bs4 import BeautifulSoup
 import textwrap
+import re
 import json
 import requests
+import logging
 import html2text
+from datetime import datetime
 from typing import Optional, Generator, Dict, Any, Union
 from .config import config
 
@@ -43,7 +47,7 @@ class ContentOptimizer(ABC):
 
     @abstractmethod
     def optimize(
-        self, content: str, stream: bool = False, strip=False
+        self, content: str, stream: bool = False, strip=False, spiderUrl=""
     ) -> Union[str, Generator[Dict[str, Any], None, None]]:
         """优化内容的抽象方法"""
         pass
@@ -363,39 +367,79 @@ class OpenAICompatibleOptimizer(ContentOptimizer):
 
 class HTMLToMarkdownOptimizer(ContentOptimizer):
     """使用html2text库的内容优化器实现"""
-    
+
     def __init__(self):
+        self.operator = "@delldi"
+        self.logger = logging.getLogger(__name__)
         self.h = html2text.HTML2Text()
+        # 基础配置
         self.h.body_width = 0  # 不限制行宽
-        self.h.ignore_links = False
-        self.h.ignore_images = False
-        self.h.ignore_emphasis = False
-        self.h.ignore_tables = False
-        self.h.ul_item_mark = "-"  # 设置无序列表标记
-        self.h.emphasis_mark = "*"  # 设置强调标记
-        
-    def optimize(self, content: str, stream: bool = False, strip=False) -> str:
+        self.h.unicode_snob = True  # 使用 unicode 字符
+        self.h.bypass_tables = False  # 不跳过表格处理
+        self.h.protect_links = True  # 保护链接
+
+        # 格式化配置
+        self.h.ignore_links = False  # 保留链接
+        self.h.ignore_images = False  # 保留图片
+        self.h.ignore_emphasis = False  # 保留强调格式（加粗、斜体）
+        self.h.ignore_tables = False  # 保留表格
+        self.h.single_line_break = False  # 单行换行
+        self.h.mark_code = True  # 标记代码块
+
+        # 标记符号配置
+        self.h.ul_item_mark = "-"  # 无序列表标记
+        self.h.emphasis_mark = "*"  # 强调标记
+        self.h.strong_mark = "**"  # 加粗标记
+
+        # 基础表格配置 - 标准Markdown表格
+        self.h.tables = True
+        self.h.preserve_tables = True
+
+        # 更美观的表格样式
+        self.h.table_border_style = "pipe"
+
+        # 增强表格处理配置
+        self.h.table_prefer_style = True
+        self.h.skip_internal_links = True
+        self.h.pad_tables = True  # 添加表格填充
+
+    def optimize(self, content: str, strip=False, spiderUrl="") -> str:
         """将HTML内容转换为Markdown格式
-        
+
         Args:
             content: HTML内容
             stream: 不使用
             strip: 是否去除前导空白
-            
+
         Returns:
             str: Markdown格式的文本
         """
         try:
-            # 转换HTML为Markdown
+            # 基础HTML清理
+            content = content.replace("<br>", "<br/>")
+            content = content.replace("<hr>", "<hr/>")
+
+            # 使用内置转换器处理
             markdown = self.h.handle(content)
-            
+
+            # 简单的后处理
+            markdown = markdown.strip()
+            markdown = re.sub(r"\n{3,}", "\n\n", markdown)  # 清理多余空行
+
+            # 后处理添加爬虫说明和时间记录、操作人记录、对应页面地址以md格式输出
+            markdown += f"\n\n> 此内容由爬虫自动生成\n"
+            markdown += f"> 爬取时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+            markdown += f"> 操作人：{self.operator} \n"
+            markdown += f"> 原始页面地址：[{spiderUrl}]({spiderUrl}) \n"
+
             # 如果需要去除前导空白
             if strip:
                 markdown = textwrap.dedent(markdown)
-                
-            return markdown
+
+            return markdown.strip()  # 移除首尾多余空白
+
         except Exception as e:
-            print(f"HTML转Markdown失败: {str(e)}")
+            self.logger.error(f"HTML转Markdown失败: {str(e)}")
             return content
 
 class OptimizerFactory:
@@ -432,7 +476,8 @@ class OptimizerFactory:
         optimizer_class = optimizers.get(optimizer_type.lower())
         if not optimizer_class:
             # 如果类型不支持，使用默认的html2md
-            self.logger.warning(f"不支持的优化器类型: {optimizer_type}，使用默认的html2md优化器")
+            logger = logging.getLogger(__name__)
+            logger.warning(f"不支持的优化器类型: {optimizer_type}，使用默认的html2md优化器")
             return HTMLToMarkdownOptimizer()
 
         if optimizer_type == "compatible":

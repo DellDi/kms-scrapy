@@ -29,7 +29,7 @@ class ConfluenceSpider(scrapy.Spider):
         self.content_parser = ContentParser(
             enable_text_extraction=False,
             content_optimizer=OptimizerFactory.create_optimizer(),
-            auth_manager=self.auth_manager
+            auth_manager=self.auth_manager,
         )
         # 设置回调函数
         self.content_parser.set_callback(self._handle_attachment_download)
@@ -44,7 +44,7 @@ class ConfluenceSpider(scrapy.Spider):
         # 创建登录请求
         login_request = self.auth_manager._create_login_request(
             {"original_url": self.start_urls[0]},
-            original_callback=self.parse  # 登录成功后调用parse方法
+            original_callback=self.parse,  # 登录成功后调用parse方法
         )
         if login_request:
             self.logger.info("开始登录流程...")
@@ -100,21 +100,17 @@ class ConfluenceSpider(scrapy.Spider):
             },
         )
 
-    def optimize_content(self, content: str) -> str:
+    def optimize_content(self, content: str, spiderUrl: str | None) -> str:
         optimizer = OptimizerFactory.create_optimizer()
-        return optimizer.optimize(content)
+        return optimizer.optimize(content=content, spiderUrl=spiderUrl)
 
     def parse_content(self, response):
         # 解析页面内容
-        soup = BeautifulSoup(response.text, "html.parser")
-        title_element = soup.select_one("#title-text")
-        main_content = soup.select_one("#main-content")
-
+        title_element, main_element = self.content_parser.parse_page_content(response.text)
         # 检查页面是否已完全加载
         retry_count = response.meta.get("retry_count", 0)
         max_retries = 3  # 最大重试次数
-        # or not main_content.find_all()
-        if not title_element or not main_content:
+        if not title_element or not main_element:
             if retry_count < max_retries:
                 self.logger.info(f"页面内容未完全加载，第{retry_count + 1}次重试")
                 meta = response.meta.copy()
@@ -132,45 +128,48 @@ class ConfluenceSpider(scrapy.Spider):
 
         # 处理页面内容
         title = title_element.get_text(strip=True)
-        content = soup.select_one("#main-content")
-
+        link_half = title_element.select_one("a").get_text(strip=True)
         # 处理附件
         attachments = []
         pending_downloads = []
-        
+
         # 获取页面中的所有附件链接
-        for attachment in soup.select('#main-content [data-linked-resource-type="attachment"]'):
+        for attachment in main_element.select('[data-linked-resource-type="attachment"]'):
             file_url = None
             if attachment.name == "img":
                 file_url = response.urljoin(attachment.get("src", ""))
             else:  # a标签
                 file_url = response.urljoin(attachment.get("href", ""))
-                
+
             if not file_url:
                 continue
-                
+
             # 创建下载请求
             download_request = self.content_parser.process_attachment(file_url)
             if download_request:
                 # 将当前信息保存到请求的meta中
-                download_request.meta.update({
-                    "current_attachments": attachments,
-                    "current_title": title,
-                    "current_content": content.get_text(),
-                    "depth_info": response.meta.get("depth_info", {}),
-                    "original_response": response,
-                })
+                download_request.meta.update(
+                    {
+                        "current_attachments": attachments,
+                        "current_title": title,
+                        "current_content": main_element.prettify(),
+                        "depth_info": response.meta.get("depth_info", {}),
+                        "original_response": response,
+                    }
+                )
                 pending_downloads.append(download_request)
-                
+
         # 如果有待下载的附件，先处理它们
         if pending_downloads:
             self.logger.info(f"开始下载{len(pending_downloads)}个附件")
             for request in pending_downloads:
                 yield request
             return
-
-        # 使用百川API优化内容
-        optimized_content = self.optimize_content(content.get_text())
+        # 使用自定义适配器优化内容,添加当前爬虫的完整路径
+        spiderUrl = response.url
+        optimized_content = self.optimize_content(
+            content=main_element.prettify(), spiderUrl=spiderUrl
+        )
 
         # 创建KMSItem对象，包含深度信息
         depth_info = response.meta.get("depth_info", {})
@@ -200,31 +199,31 @@ class ConfluenceSpider(scrapy.Spider):
             "timestamp": datetime.now().isoformat(),
             "status": "success",
         }
-        
+
     def _handle_attachment_download(self, response):
         """处理附件下载完成的回调
-        
+
         从response.meta中获取原始信息，处理下载结果，
         如果是最后一个附件，则继续处理文档导出
         """
         if not response.meta.get("is_attachment"):
             return
-            
+
         # 获取保存的上下文信息
         attachments = response.meta.get("current_attachments", [])
         title = response.meta.get("current_title")
         content = response.meta.get("current_content")
         depth_info = response.meta.get("depth_info", {})
         original_response = response.meta.get("original_response")
-        
+
         # 处理下载结果
         attachment_info = self.content_parser.handle_downloaded_file(response)
         if attachment_info:
             attachments.append(attachment_info)
-            
+
         # 优化内容
         optimized_content = self.optimize_content(content)
-        
+
         # 创建文档并导出
         kms_item = KMSItem(
             title=title,
@@ -232,13 +231,13 @@ class ConfluenceSpider(scrapy.Spider):
             attachments=attachments,
             depth_info=depth_info,
         )
-        
+
         exporter = DocumentExporter()
         markdown_path, attachments_dir = exporter.export(kms_item)
-        
+
         self.logger.info(f"已保存文档：{markdown_path}")
         self.logger.info(f"附件保存在：{attachments_dir}" if attachments else "无附件")
-        
+
         # yield结果给管道
         yield {
             "title": title,
