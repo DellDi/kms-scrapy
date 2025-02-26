@@ -10,7 +10,6 @@ from docx import Document
 from pptx import Presentation
 import pytesseract
 from pdf2image import convert_from_path
-import pylibmagic
 import magic
 
 import requests
