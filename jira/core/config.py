@@ -1,6 +1,5 @@
 from dataclasses import dataclass, field
 from typing import Dict, List
-from datetime import datetime
 
 @dataclass
 class AuthConfig:
@@ -65,12 +64,21 @@ class ExporterConfig:
     encoding: str = "utf-8"          # 文件编码
 
 @dataclass
+class AttachmentFilterConfig:
+    """附件过滤配置"""
+    exclude: tuple[str] = ("png", "jpg", "jpeg", "gif", "bmp","mp4","zip","tar","gz","rar")
+    size_limit: int = 50
+
+@dataclass
 class Config:
     """全局配置类"""
     auth: AuthConfig = field(default_factory=AuthConfig)
     spider: SpiderConfig = field(default_factory=SpiderConfig)
     optimizer: OptimizerConfig = field(default_factory=OptimizerConfig)
     exporter: ExporterConfig = field(default_factory=ExporterConfig)
+    # 添加附件过滤控制
+    attachment_filters: AttachmentFilterConfig = field(default_factory=AttachmentFilterConfig)
+
 
     def update_from_env(self):
         """从环境变量更新配置"""

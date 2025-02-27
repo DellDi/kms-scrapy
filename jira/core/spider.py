@@ -408,8 +408,8 @@ class JiraSpider:
                     attachments.append(md_link)
                     annex_urls.append(meta)
                     # 下载附件
-                    # 检查附件类型,非图片类型才下载
-                    if not meta["name"].lower().endswith(("png", "jpg", "jpeg", "gif", "bmp")):
+                    # 检查附件类型,非排除列表中的类型才下载
+                    if not meta["name"].lower().endswith(config.attachment_filters.exclude):
                         self.download_attachment(
                             url=meta["url"],
                             page_dir=page_dir,
