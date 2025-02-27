@@ -10,12 +10,9 @@ from datetime import datetime
 from pathlib import Path
 
 from dify import DifyClient, DatasetManager
+from config import API_KEY, BASE_URL, DEFAULT_INPUT_DIR, SUPPORTED_FILE_EXTENSIONS
 
-# 默认配置
-DEFAULT_INPUT_DIR = "output-jira"  # 默认从output目录读取文件
-API_KEY = os.getenv("DIFY_API_KEY", "your-api-key")
-BASE_URL = os.getenv("DIFY_BASE_URL", "https://api.dify.ai/v1")
-
+# 配置日志
 def setup_logging():
     """配置日志"""
     # 创建logs目录（如果不存在）
@@ -89,15 +86,7 @@ def process_documents(client: DifyClient) -> Optional[bool]:
             if file_path.is_file():
                 try:
                     # 收集支持的文件
-                    if file_path.suffix in [
-                        ".md",
-                        ".txt",
-                        ".xlsx",
-                        ".doc",
-                        ".pdf",
-                        ".docx",
-                        ".json",
-                    ]:
+                    if file_path.suffix in SUPPORTED_FILE_EXTENSIONS:
                         files_to_upload.append(str(file_path))
                         logger.info(f"添加待上传文件: {file_path.name}")
                     else:
@@ -127,10 +116,6 @@ def process_documents(client: DifyClient) -> Optional[bool]:
             logger.info(f"- 文档数量: {doc_count}")
             logger.info(f"- 剩余容量: {dataset_manager.max_docs - doc_count}")
 
-            # 输出进度
-            progress = (processed_files / total_files) * 100
-            logger.info(f"进度: {progress:.2f}% ({processed_files}/{total_files})")
-
         # 计算执行时间
         end_time = datetime.now()
         duration = end_time - start_time
@@ -138,9 +123,9 @@ def process_documents(client: DifyClient) -> Optional[bool]:
         # 输出统计信息
         logger.info("-" * 50)
         logger.info("处理完成!")
-        logger.info(f"总文件数: {total_files}")
+        logger.info(f"总文件数: {len(files_to_upload)}")
         logger.info(f"成功上传: {successful_uploads}")
-        logger.info(f"失败数量: {total_files - successful_uploads}")
+        logger.info(f"失败数量: {len(files_to_upload) - successful_uploads}")
         logger.info(f"执行时间: {duration}")
         logger.info("-" * 50)
 
@@ -162,6 +147,7 @@ def main():
         logger.info("Dify客户端初始化完成")
         logger.info(f"API密钥: {'*' * 16}{API_KEY[-4:] if len(API_KEY) > 4 else API_KEY}")
         logger.info(f"API地址: {BASE_URL}")
+        logger.info(f"输入目录: {DEFAULT_INPUT_DIR}")
         # 处理文档
         success = process_documents(client)
         sys.exit(0 if success else 1)

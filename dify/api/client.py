@@ -13,6 +13,7 @@ from urllib.parse import urljoin
 import aiohttp
 import asyncio
 import json
+from ..config import BASE_URL as DEFAULT_BASE_URL
 
 
 class DifyAPIError(Exception):
@@ -24,7 +25,7 @@ class DifyAPIError(Exception):
 class DifyClient:
     """Dify API 客户端"""
 
-    def __init__(self, api_key: str, base_url: str = "https://cloud.dify.ai/console/api"):
+    def __init__(self, api_key: str, base_url: str = DEFAULT_BASE_URL):
         """
         初始化 Dify 客户端
 
@@ -225,6 +226,7 @@ class DifyClient:
         rule_config = {
             "indexing_technique": indexing_technique,
             "doc_form": "text_model",
+            # 自动规则处理
             "process_rule": {
                 "mode": "automatic",
             },
@@ -270,7 +272,7 @@ class DifyClient:
         results = []
         for file_path in file_paths:
             try:
-                result = self.upload_file(dataset_id, file_path, indexing_technique, process_rule)
+                result = self.upload_file(dataset_id, file_path, indexing_technique)
                 results.append(result)
                 self.logger.info(f"成功上传文件: {os.path.basename(file_path)}")
 

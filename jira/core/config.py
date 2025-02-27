@@ -66,8 +66,9 @@ class ExporterConfig:
 @dataclass
 class AttachmentFilterConfig:
     """附件过滤配置"""
-    exclude: tuple[str] = ("png", "jpg", "jpeg", "gif", "bmp","mp4","zip","tar","gz","rar")
-    size_limit: int = 50
+    """支持 TXT、 MARKDOWN、 MDX、 PDF、 HTML、 XLSX、 XLS、 DOCX、 CSV、 MD、 HTM，每个文件不超过 15MB。"""
+    included_extensions: tuple[str] = ("txt", "md", "markdown", "mdx", "pdf", "html", "xlsx", "xls", "docx", "csv", "md", "htm")
+    size_limit: int = 15 * 1024 * 1024  # 15MB
 
 @dataclass
 class Config:
@@ -78,7 +79,6 @@ class Config:
     exporter: ExporterConfig = field(default_factory=ExporterConfig)
     # 添加附件过滤控制
     attachment_filters: AttachmentFilterConfig = field(default_factory=AttachmentFilterConfig)
-
 
     def update_from_env(self):
         """从环境变量更新配置"""

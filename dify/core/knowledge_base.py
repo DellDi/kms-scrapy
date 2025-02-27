@@ -6,11 +6,12 @@ import re
 import logging
 from typing import Dict, List, Optional, Any
 from ..api.client import DifyClient, DifyAPIError
+from ..config import MAX_DOCS_PER_DATASET, DATASET_NAME_PREFIX, DATASET_NAME_PATTERN
 
 class DatasetManager:
     """数据集管理器"""
 
-    def __init__(self, client: DifyClient, max_docs: int = 100):
+    def __init__(self, client: DifyClient, max_docs: int = MAX_DOCS_PER_DATASET):
         """
         初始化数据集管理器
 
@@ -88,12 +89,11 @@ class DatasetManager:
         Returns:
             tuple[Dict, int]: (最新数据集信息, 数据集编号)
         """
-        pattern = r"kms-(\d+)"
         max_number = 0
         latest_dataset = None
 
         for dataset in datasets:
-            match = re.search(pattern, dataset["name"])
+            match = re.search(DATASET_NAME_PATTERN, dataset["name"])
             if match:
                 number = int(match.group(1))
                 if number > max_number:
@@ -113,7 +113,7 @@ class DatasetManager:
         Returns:
             Dict: 新创建的数据集信息
         """
-        name = f"kms-{self._dataset_number}"
+        name = f"{DATASET_NAME_PREFIX}-{self._dataset_number}"
         description = f"知识管理系统文档库 #{self._dataset_number}"
         return self.client.create_dataset(name, description)
 
