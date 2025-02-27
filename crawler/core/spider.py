@@ -128,7 +128,6 @@ class ConfluenceSpider(scrapy.Spider):
 
         # 处理页面内容
         title = title_element.get_text(strip=True)
-        link_half = title_element.select_one("a").get_text(strip=True)
         # 处理附件
         attachments = []
         pending_downloads = []
@@ -222,7 +221,7 @@ class ConfluenceSpider(scrapy.Spider):
             attachments.append(attachment_info)
 
         # 优化内容
-        optimized_content = self.optimize_content(content)
+        optimized_content = self.optimize_content(content=content, spiderUrl=response.url)
 
         # 创建文档并导出
         kms_item = KMSItem(

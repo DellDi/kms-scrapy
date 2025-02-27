@@ -40,7 +40,7 @@ class ContentParser:
         """初始化解析器
 
         Args:
-            enable_text_extraction: 是否启用文本提取功能，默认为False
+            enable_text_extraction: 是否启用对应的附件的文本提取功能，默认为False
             content_optimizer: 内容优化器实例，用于美化提取的文本
             auth_manager: 认证管理器实例，用于处理认证请求
         """
@@ -144,6 +144,22 @@ class ContentParser:
                 ext = mimetypes.guess_extension(content_type)
                 if ext:
                     file_name = f"{file_name}{ext}"
+                    
+            # 检查是否需要过滤此附件（基于实际MIME类型和文件大小）
+            attachment_filters = response.meta.get("attachment_filters")
+            if attachment_filters and attachment_filters.get("enabled", False):
+                # 检查MIME类型
+                excluded_mime_types = attachment_filters.get("excluded_mime_types", [])
+                if any(file_type.startswith(excluded) for excluded in excluded_mime_types):
+                    self.logger.info(f"附件 {file_name} 因实际MIME类型 {file_type} 被过滤")
+                    return None
+                
+                # 检查文件大小
+                max_size_mb = attachment_filters.get("max_size_mb", 50)
+                file_size_mb = len(response.body) / (1024 * 1024)  # 转换为MB
+                if file_size_mb > max_size_mb:
+                    self.logger.info(f"附件 {file_name} 因大小 {file_size_mb:.2f}MB 超过限制 {max_size_mb}MB 被过滤")
+                    return None
 
             # 创建临时文件
             temp_path = f"temp_{file_name}"
@@ -206,6 +222,34 @@ class ContentParser:
 
         self.logger.info(f"开始处理附件下载: {file_url}")
 
+        # 检查是否需要过滤此附件
+        from crawler.core.config import config
+        
+        if config.spider.attachment_filters.get("enabled", False):
+            # 1. 检查文件扩展名
+            file_name = os.path.basename(file_url).split("?")[0]
+            file_name = urllib.parse.unquote(file_name)
+            file_ext = os.path.splitext(file_name)[1].lower()
+            
+            # 检查扩展名过滤
+            excluded_extensions = config.spider.attachment_filters.get("excluded_extensions", [])
+            if file_ext in excluded_extensions:
+                self.logger.info(f"附件 {file_name} 因扩展名 {file_ext} 被过滤")
+                return None
+                
+            # 2. 检查URL中的MIME类型提示（如果有）
+            mime_hint = None
+            if "content-type=" in file_url.lower():
+                mime_parts = [p for p in file_url.split("&") if "content-type=" in p.lower()]
+                if mime_parts:
+                    mime_hint = mime_parts[0].split("=")[1]
+                    
+            # 如果URL中有MIME类型提示，检查是否在排除列表中
+            excluded_mime_types = config.spider.attachment_filters.get("excluded_mime_types", [])
+            if mime_hint and any(excluded in mime_hint.lower() for excluded in excluded_mime_types):
+                self.logger.info(f"附件 {file_name} 因MIME类型提示 {mime_hint} 被过滤")
+                return None
+
         # 创建下载请求
         request = self.auth_manager.create_authenticated_request(
             url=file_url,
@@ -217,6 +261,8 @@ class ContentParser:
                 "dont_retry": False,
                 "dont_merge_cookies": False,
                 "is_attachment": True,  # 标记这是附件下载请求
+                "attachment_filters": config.spider.attachment_filters if config.spider.attachment_filters.get("enabled", False) else None,
+                # 将过滤配置传递给回调函数，避免重复导入
             },
         )
 

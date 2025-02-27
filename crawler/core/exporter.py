@@ -55,7 +55,7 @@ class DocumentExporter:
     def _save_attachments(
         self, attachments: List[Dict[str, Any]], attachments_dir: str
     ) -> List[Dict[str, str]]:
-        """保存附件文件并返回附件信息列表"""
+        """保存爬虫页面对应的附件文件并返回附件信息列表"""
         saved_attachments = []
         for attachment in attachments:
             # 保存原始附件

@@ -116,7 +116,25 @@ process.crawl(
 )
 ```
 
-2. 运行爬虫：
+2. 配置附件过滤（可选）：
+
+在 `crawler/core/config.py` 中修改 `SpiderConfig` 类的 `attachment_filters` 配置：
+
+```python
+# 附件过滤配置
+attachment_filters: Dict[str, Any] = {
+    # 排除的MIME类型列表
+    "excluded_mime_types": ["image/jpeg", "image/png", "image/gif", "image/svg+xml"],
+    # 排除的文件扩展名列表
+    "excluded_extensions": [".jpg", ".jpeg", ".png", ".gif", ".svg"],
+    # 最大附件大小(MB)，超过此大小的附件将被跳过
+    "max_size_mb": 50,
+    # 是否启用附件过滤
+    "enabled": True,
+}
+```
+
+3. 运行爬虫：
 
 ```bash
 uv run crawler/main.py

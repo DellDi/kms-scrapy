@@ -32,6 +32,13 @@ class SpiderConfig(BaseModel):
         "ajs_user_id": "b855f69db6d93f0a1a50b21008c841d7416fc802",
         "ajs_anonymous_id": "be8fadfe-3cd8-4b1b-9c20-c467f8b20eae",
     }
+    # 附件过滤配置
+    attachment_filters: Dict[str, Any] = {
+        "excluded_mime_types": ["image/jpeg", "image/png", "image/gif", "image/svg+xml"],  # 排除的MIME类型
+        "excluded_extensions": [".jpg", ".jpeg", ".png", ".gif", ".svg"],  # 排除的文件扩展名
+        "max_size_mb": 50,  # 最大附件大小(MB)，超过此大小的附件将被跳过
+        "enabled": True,  # 是否启用附件过滤
+    }
 
 
 class BaichuanConfig(BaseModel):
