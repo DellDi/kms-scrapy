@@ -21,9 +21,7 @@ class SpiderConfig:
     page_size: int = 500  # 每页数量
     start_at: int = 0  # 起始位置
     jql: str = (  # JQL查询条件
-        "project in (PMS) AND created >= 2023-01-01 AND resolved <= startOfDay() "
-        "OR project in (运维服务) AND assignee in (wangchun, fuchenjie, zhangjunjie, wangqinghua, dingpeng, wangcaichao) "
-        "AND created >= 2023-01-01 AND resolved <= startOfDay() ORDER BY created ASC"
+        "assignee = currentUser() AND resolution = Unresolved order by updated DESC"
     )
 
     # 默认请求头

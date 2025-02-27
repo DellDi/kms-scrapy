@@ -78,7 +78,13 @@ class DifyClient:
                 # 添加文件字段
                 for key, file_tuple in kwargs["files"].items():
                     filename, file_obj, content_type = file_tuple
-                    data.add_field(key, file_obj, filename=filename, content_type=content_type)
+                    # 这会自动生成正确的Content-Disposition头部
+                    data.add_field(
+                        name=key,
+                        value=file_obj,
+                        filename=filename,
+                        content_type=content_type,
+                    )
                 kwargs.pop("files")
             else:
                 data = None
@@ -239,15 +245,18 @@ class DifyClient:
                     "reranking_model_name": "gte-rerank",
                 },
                 "score_threshold_enabled": False,
+                "score_threshold": 0.5,
             },
             "embedding_model": "text-embedding-v3",
             "embedding_model_provider": "tongyi",
         }
 
         with open(file_path, "rb") as f:
-            files = {"file": (os.path.basename(file_path), f, "application/octet-stream")}
-            # 将规则配置转换为JSON字符串
-            data = {"data": json.dumps(rule_config)}
+            # 获取文件名，直接使用原始文件名
+            import urllib.parse
+            filename = urllib.parse.quote(os.path.basename(file_path))
+            files = {"file": (filename, f, "application/octet-stream")}
+            data = {"data": json.dumps(rule_config, ensure_ascii=False)}
 
             return self._make_request(
                 "POST", f"/datasets/{dataset_id}/document/create-by-file", data=data, files=files

@@ -99,7 +99,7 @@ class DocumentExporter:
 {issue.annex_str or "（无附件内容）"}
 
 ---
-*本文档由爬虫自动生成于 {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}*
+*本文档由爬虫自动生成于 {datetime.now().strftime("%Y-%m-%d %H:%M:%S")} 操作人@delldi*
         """
         ).strip()
 

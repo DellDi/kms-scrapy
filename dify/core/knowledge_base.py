@@ -34,7 +34,7 @@ class DatasetManager:
             Dict: 当前使用的数据集信息
         """
         try:
-            self.logger.info("开始获取数据集列表...111")
+            self.logger.info("开始获取数据集列表")
             # 获取数据集列表
             response = self.client.list_datasets()
 
