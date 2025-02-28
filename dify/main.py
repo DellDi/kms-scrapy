@@ -11,7 +11,7 @@ from pathlib import Path
 
 from dify import DifyClient, DatasetManager
 from config import API_KEY, BASE_URL, DEFAULT_INPUT_DIR, SUPPORTED_FILE_EXTENSIONS
-from dotenv import load_dotenv
+
 
 # 配置日志
 def setup_logging():
@@ -21,7 +21,6 @@ def setup_logging():
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
 
-    load_dotenv(dotenv_path="../.env")
     # 生成日志文件路径
     log_file = os.path.join(
         log_dir, f'dify_uploader_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log'

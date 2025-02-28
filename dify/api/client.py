@@ -7,38 +7,37 @@ Dify API 客户端实现
 import os
 from typing import Dict, List, Optional, Union, Any
 import os
-from scrapy.http import Request
-import logging
 from urllib.parse import urljoin
-import aiohttp
-import asyncio
 import json
-from ..config import BASE_URL as DEFAULT_BASE_URL
-
-
-class DifyAPIError(Exception):
-    """Dify API 异常"""
-
-    pass
+import logging
+import requests
+from ..config import BASE_URL as DEFAULT_BASE_URL, EMBEDDING_PROVIDER_DICT, AttachmentSizeLimit
 
 
 class DifyClient:
     """Dify API 客户端"""
 
-    def __init__(self, api_key: str, base_url: str = DEFAULT_BASE_URL):
+    def __init__(
+        self,
+        api_key: str,
+        base_url: str = None,
+        logger: Optional[logging.Logger] = None,
+    ):
         """
         初始化 Dify 客户端
 
         Args:
-            api_key: Dify API 密钥
-            base_url: API 基础 URL
+            api_key: API密钥
+            base_url: API基础URL
         """
         self.api_key = api_key
-        self.base_url = base_url.rstrip("/")
+        self.base_url = base_url or DEFAULT_BASE_URL
+        # 移除末尾斜杠
+        self.base_url = self.base_url.rstrip("/")
         if "#" in self.base_url:  # 移除注释
             self.base_url = self.base_url.split("#")[0].strip()
 
-        self.logger = logging.getLogger(__name__)
+        self.logger = logger or logging.getLogger(__name__)
         self.logger.info("DifyClient 初始化:")
         self.logger.info(f"Base URL: {self.base_url}")
         self.logger.info(f"API Key: {api_key}")
@@ -50,69 +49,96 @@ class DifyClient:
         }
 
     def _make_request(self, method: str, endpoint: str, **kwargs) -> Dict:
-        # 确保 endpoint 不以斜杠开头
-        endpoint = endpoint.lstrip("/")
-        url = urljoin(self.base_url + "/", endpoint)
+        """
+        发送API请求
 
+        Args:
+            method: HTTP方法（GET, POST等）
+            endpoint: API端点
+            **kwargs: 请求参数
+
+        Returns:
+            Dict: 响应数据
+        """
+        url = f"{self.base_url}{endpoint}"
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Accept": "application/json",
+        }
+
+        # 合并自定义headers
+        if "headers" in kwargs:
+            headers.update(kwargs.pop("headers"))
+
+        self.logger.info(f"Making {method} request to {url}")
+
+        # 处理不同类型的请求体
+        if "json" in kwargs:
+            # 标准JSON请求，使用json参数
+            headers["Content-Type"] = "application/json"
+            data = None
+            json_data = kwargs.pop("json")
+            files = None
+        elif "files" in kwargs:
+            # 处理文件上传
+            data = kwargs.pop("data", {}) if "data" in kwargs else {}
+            files = kwargs.pop("files")
+
+            json_data = None
+        else:
+            # 默认为无请求体
+            data = kwargs.pop("data", None) if "data" in kwargs else None
+            json_data = None
+            files = None
+
+        # 记录请求信息
+        self.logger.debug(f"Headers: {headers}")
+        if json_data:
+            self.logger.info(f"JSON Data: {json.dumps(json_data, indent=4)}")
+
+        # 发送请求
         try:
-            # 设置请求头，添加UTF-8编码
-            headers = self.headers.copy()
+            response = requests.request(
+                method,
+                url,
+                headers=headers,
+                json=json_data,
+                data=data,
+                files=files,
+                **kwargs
+            )
 
-            # 确保JSON数据使用UTF-8编码
-            if "json" in kwargs:
-                data = json.dumps(kwargs.pop("json"), ensure_ascii=False).encode("utf-8")
-                headers["Content-Type"] = "application/json; charset=utf-8"
-            elif "files" in kwargs:
-                # 处理文件上传，使用FormData格式
-                data = aiohttp.FormData()
-                # 如果有data字段，作为普通字段添加到FormData中
-                if "data" in kwargs:
-                    form_data = kwargs.pop("data")
-                    if isinstance(form_data, dict):
-                        for key, value in form_data.items():
-                            if isinstance(value, str):
-                                data.add_field(key, value)
-                            else:
-                                data.add_field(key, json.dumps(value, ensure_ascii=False))
+            # 强制响应使用UTF-8编码
+            response.encoding = 'utf-8'
 
-                # 添加文件字段
-                for key, file_tuple in kwargs["files"].items():
-                    filename, file_obj, content_type = file_tuple
-                    # 这会自动生成正确的Content-Disposition头部
-                    data.add_field(
-                        name=key,
-                        value=file_obj,
-                        filename=filename,
-                        content_type=content_type,
-                    )
-                kwargs.pop("files")
-            else:
-                data = None
+            # 检查响应状态
+            response.raise_for_status()
 
-            async def make_request():
-                async with aiohttp.ClientSession() as session:
-                    self.logger.info(
-                        f"Making {method} request to {url},kwargs:{kwargs},headers:{headers}"
-                    )
-                    async with session.request(
-                        method=method,
-                        url=url,
-                        headers=headers,
-                        data=data,
-                        params=kwargs.get("params"),
-                        **{k: v for k, v in kwargs.items() if k not in ["json", "params", "data"]},
-                    ) as response:
-                        if response.status != 200:
-                            raise DifyAPIError(f"API请求失败: HTTP {response.status}")
-                        return await response.json(encoding="utf-8")
+            # 尝试解析JSON响应
+            try:
+                # 先记录原始响应
+                result = response.json()
+            except ValueError:
+                # 如果不是有效的JSON，返回文本内容
+                result = {"text": response.text}
 
-            # 运行异步请求
-            loop = asyncio.get_event_loop()
-            return loop.run_until_complete(make_request())
+            self.logger.debug(f"Response: {result}")
+            return result
 
-        except Exception as e:
-            error_msg = f"API 请求失败: {str(e)}"
-            raise DifyAPIError(error_msg) from e
+        except requests.exceptions.RequestException as e:
+            self.logger.error(f"Request failed: {e}")
+            # 尝试提取错误响应
+            error_response = {}
+            try:
+                if hasattr(e, 'response') and e.response is not None:
+                    error_response = e.response.json()
+            except ValueError:
+                if hasattr(e, 'response') and e.response is not None:
+                    error_response = {"text": e.response.text}
+
+            self.logger.error(f"Error response: {error_response}")
+            # 重新抛出异常并附加响应信息
+            raise RuntimeError(f"API request failed: {str(e)}") from e
 
     def create_dataset(self, name: str, description: str = "") -> Dict:
         """
@@ -240,26 +266,35 @@ class DifyClient:
                 "search_method": "hybrid_search",
                 "reranking_enable": True,
                 "top_k": 5,
-                "reranking_model": {
-                    "reranking_provider_name": "tongyi",
-                    "reranking_model_name": "gte-rerank",
-                },
+                "reranking_model": EMBEDDING_PROVIDER_DICT["reranking_model"],
                 "score_threshold_enabled": False,
                 "score_threshold": 0.5,
             },
-            "embedding_model": "text-embedding-v3",
-            "embedding_model_provider": "tongyi",
+            "embedding_model": EMBEDDING_PROVIDER_DICT["embedding_model"],
+            "embedding_model_provider": EMBEDDING_PROVIDER_DICT["embedding_model_provider"],
         }
 
-        with open(file_path, "rb") as f:
-            # 获取文件名，直接使用原始文件名
-            import urllib.parse
-            filename = urllib.parse.quote(os.path.basename(file_path))
-            files = {"file": (filename, f, "application/octet-stream")}
-            data = {"data": json.dumps(rule_config, ensure_ascii=False)}
+        # 获取文件名，直接使用原始文件名
+        filename = os.path.basename(file_path)
 
+        # 通过文件类型限制上传的文件类型的大小，超过则跳过本次上传
+        file_type = filename.split(".")[-1].lower()
+        file_size_limit = AttachmentSizeLimit.get(file_type, None)
+        if file_size_limit is not None and os.path.getsize(file_path) > file_size_limit:
+            self.logger.error(f"File size exceeds limit: {os.path.getsize(file_path)} > {file_size_limit}")
+            raise ValueError(f"File size exceeds limit: {file_size_limit}")
+
+        # 准备请求数据
+        data = {'data': json.dumps(rule_config, ensure_ascii=False)}
+
+        # 打开文件并发送请求
+        with open(file_path, 'rb') as file_obj:
+            files = {'file': (filename, file_obj, 'application/octet-stream')}
             return self._make_request(
-                "POST", f"/datasets/{dataset_id}/document/create-by-file", data=data, files=files
+                "POST", 
+                f"/datasets/{dataset_id}/document/create-by-file", 
+                data=data, 
+                files=files
             )
 
     def upload_multiple_files(
@@ -283,7 +318,6 @@ class DifyClient:
             try:
                 result = self.upload_file(dataset_id, file_path, indexing_technique)
                 results.append(result)
-                self.logger.info(f"成功上传文件: {os.path.basename(file_path)}")
 
             except Exception as e:
                 self.logger.error(f"上传文件失败 {os.path.basename(file_path)}: {str(e)}")

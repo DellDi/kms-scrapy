@@ -2,10 +2,14 @@
 负责知识库（数据集）的创建和管理
 """
 import os
-import re
 import logging
-from typing import Dict, List, Optional, Any
-from ..api.client import DifyClient, DifyAPIError
+import json
+from typing import Dict, List, Optional
+import glob
+import re
+from pathlib import Path
+
+from ..api.client import DifyClient
 from ..config import MAX_DOCS_PER_DATASET, DATASET_NAME_PREFIX, DATASET_NAME_PATTERN
 
 class DatasetManager:
@@ -76,7 +80,7 @@ class DatasetManager:
 
             return self._current_dataset
 
-        except DifyAPIError as e:
+        except Exception as e:
             raise RuntimeError(f"初始化数据集管理器失败: {str(e)}")
 
     def _get_latest_dataset(self, datasets: List[dict]) -> tuple[Dict, int]:

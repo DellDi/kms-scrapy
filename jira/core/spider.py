@@ -310,10 +310,11 @@ class JiraSpider:
             response = self._make_request(
                 url=url, headers={**config.spider.default_headers, "Accept": "*/*"}
             )
-            
+
             # 判断文件大小限制
-            if response.headers.get("Content-Length", 0) > config.attachment_filters.size_limit:
-                logger.warning(f"附件大小超过限制: {filename} ({response.headers.get('Content-Length', 0)} B)")
+            content_length = int(response.headers.get("Content-Length", "0"))
+            if content_length > config.attachment_filters.size_limit:
+                logger.warning(f"附件大小超过限制: {filename} ({content_length} B)")
                 return False
 
             # 写入文件
@@ -412,8 +413,7 @@ class JiraSpider:
                     md_link, meta = format_attachment(a, issue_data["key"])
                     attachments.append(md_link)
                     annex_urls.append(meta)
-                    # 下载附件
-                    # 检查附件类型,非排除列表中的类型才下载
+                    # 下载附件,检查附件类型,非排除列表中的类型才下载
                     if meta["name"].lower().endswith(config.attachment_filters.included_extensions):
                         self.download_attachment(
                             url=meta["url"],
@@ -421,7 +421,8 @@ class JiraSpider:
                             issue_key=issue_data["key"],
                             filename=meta["name"],
                         )
-
+                    else:
+                        logger.warning(f"附件类型不在限制内: {meta['name']} : ({meta['url']})")
             issue_data["annex_str"] = "\n".join(attachments)
             issue_data["annex_urls"] = annex_urls
 
