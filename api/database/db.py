@@ -25,9 +25,25 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 # 声明基类
 Base = declarative_base()
 
-@contextmanager
 def get_db() -> Generator[Session, None, None]:
-    """获取数据库会话的上下文管理器."""
+    """获取数据库会话.
+
+    This is a FastAPI dependency that yields a database session.
+    """
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+@contextmanager
+def get_db_context() -> Generator[Session, None, None]:
+    """获取数据库会话（上下文管理器版本）.
+
+    This is for use with 'with' statements:
+        with get_db_context() as db:
+            db.query(User).all()
+    """
     db = SessionLocal()
     try:
         yield db
@@ -40,5 +56,8 @@ def get_db() -> Generator[Session, None, None]:
 
 def init_db() -> None:
     """初始化数据库."""
-    from api.database.models import ApiLog  # 避免循环导入
+    # 导入所有模型以确保它们被注册到Base.metadata
+    from api.database.models import ApiLog, Task  # 避免循环导入
+
+    # 创建所有表
     Base.metadata.create_all(bind=engine)

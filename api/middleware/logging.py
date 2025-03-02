@@ -1,21 +1,21 @@
 """API请求日志记录中间件."""
-
 import json
 import time
 from typing import Callable
 
 from fastapi import Request, Response
+from fastapi.responses import FileResponse
 from starlette.middleware.base import BaseHTTPMiddleware
-from sqlalchemy.orm import Session
 
-from api.database.db import get_db
 from api.database.models import ApiLog
-
+from api.database.db import get_db_context
 
 class APILoggingMiddleware(BaseHTTPMiddleware):
     """API请求日志记录中间件."""
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: Callable
+    ) -> Response:
         """处理请求并记录日志."""
         # 记录开始时间
         start_time = time.time()
@@ -43,7 +43,27 @@ class APILoggingMiddleware(BaseHTTPMiddleware):
             # 处理请求
             response = await call_next(request)
 
-            # 获取响应内容
+            # 检查是否是文件响应
+            if isinstance(response, FileResponse):
+                # 如果是文件下载，直接返回响应
+                duration = int((time.time() - start_time) * 1000)
+                with get_db_context() as db:
+                    log_entry = ApiLog(
+                        client_ip=client_ip,
+                        request_path=path,
+                        request_method=method,
+                        request_params=json.dumps(params) if params else None,
+                        request_body=body_str,
+                        response_status=response.status_code,
+                        response_body="[File Download]",  # 文件下载不记录响应内容
+                        user_agent=user_agent,
+                        duration_ms=duration
+                    )
+                    db.add(log_entry)
+
+                return response
+
+            # 处理普通响应
             response_body = b""
             async for chunk in response.body_iterator:
                 response_body += chunk
@@ -53,7 +73,7 @@ class APILoggingMiddleware(BaseHTTPMiddleware):
                 content=response_body,
                 status_code=response.status_code,
                 headers=dict(response.headers),
-                media_type=response.media_type,
+                media_type=response.media_type
             )
 
         except Exception as e:
@@ -61,31 +81,25 @@ class APILoggingMiddleware(BaseHTTPMiddleware):
             raise
 
         finally:
-            # 计算处理时长
-            duration = int((time.time() - start_time) * 1000)
+            if not isinstance(response, FileResponse):  # 只对非文件响应记录完整日志
+                # 计算处理时长
+                duration = int((time.time() - start_time) * 1000)
 
-            try:
-                log_message = response_body.decode("utf-8", errors="replace")
-            except:
-                log_message = "【附件下载】"
-            # 保存日志
-            log_entry = ApiLog(
-                client_ip=client_ip,
-                request_path=path,
-                request_method=method,
-                request_params=json.dumps(params) if params else None,
-                request_body=body_str,
-                response_status=response.status_code if response else 500,
-                response_body=log_message if response else None,
-                user_agent=user_agent,
-                duration_ms=duration,
-                error_message=error_message,
-            )
-
-            # 使用数据库会话保存日志
-            try:
-                with get_db() as db:
-                    db.add(log_entry)
-                    db.commit()
-            except Exception as e:
-                print(f"Error saving API log: {e}")
+                # 保存日志
+                try:
+                    with get_db_context() as db:
+                        log_entry = ApiLog(
+                            client_ip=client_ip,
+                            request_path=path,
+                            request_method=method,
+                            request_params=json.dumps(params) if params else None,
+                            request_body=body_str,
+                            response_status=response.status_code if response else 500,
+                            response_body=response_body.decode() if response else None,
+                            user_agent=user_agent,
+                            duration_ms=duration,
+                            error_message=error_message
+                        )
+                        db.add(log_entry)
+                except Exception as e:
+                    print(f"Error saving API log: {e}")
