@@ -1,4 +1,5 @@
 """API请求日志记录中间件."""
+
 import json
 import time
 from typing import Callable
@@ -10,12 +11,11 @@ from sqlalchemy.orm import Session
 from api.database.db import get_db
 from api.database.models import ApiLog
 
+
 class APILoggingMiddleware(BaseHTTPMiddleware):
     """API请求日志记录中间件."""
 
-    async def dispatch(
-        self, request: Request, call_next: Callable
-    ) -> Response:
+    async def dispatch(self, request: Request, call_next: Callable) -> Response:
         """处理请求并记录日志."""
         # 记录开始时间
         start_time = time.time()
@@ -53,7 +53,7 @@ class APILoggingMiddleware(BaseHTTPMiddleware):
                 content=response_body,
                 status_code=response.status_code,
                 headers=dict(response.headers),
-                media_type=response.media_type
+                media_type=response.media_type,
             )
 
         except Exception as e:
@@ -65,9 +65,9 @@ class APILoggingMiddleware(BaseHTTPMiddleware):
             duration = int((time.time() - start_time) * 1000)
 
             try:
-                log_message = response_body.decode('utf-8', errors='replace')
+                log_message = response_body.decode("utf-8", errors="replace")
             except:
-                log_message = "二进制数据"
+                log_message = "【附件下载】"
             # 保存日志
             log_entry = ApiLog(
                 client_ip=client_ip,
