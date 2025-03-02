@@ -7,11 +7,16 @@ Dify API 客户端实现
 import os
 from typing import Dict, List, Optional, Union, Any
 import os
-from urllib.parse import urljoin
 import json
 import logging
 import requests
-from ..config import BASE_URL as DEFAULT_BASE_URL, EMBEDDING_PROVIDER_DICT, AttachmentSizeLimit
+from ..config import (
+    BASE_URL as DEFAULT_BASE_URL,
+    EMBEDDING_PROVIDER_DICT,
+    EMBEDDING_DEFAULT_PROCESS_RULE,
+    EMBEDDING_PROCESS_PARENT_RULE,
+    AttachmentSizeLimit,
+)
 
 
 class DifyClient:
@@ -99,17 +104,11 @@ class DifyClient:
         # 发送请求
         try:
             response = requests.request(
-                method,
-                url,
-                headers=headers,
-                json=json_data,
-                data=data,
-                files=files,
-                **kwargs
+                method, url, headers=headers, json=json_data, data=data, files=files, **kwargs
             )
 
             # 强制响应使用UTF-8编码
-            response.encoding = 'utf-8'
+            response.encoding = "utf-8"
 
             # 检查响应状态
             response.raise_for_status()
@@ -130,10 +129,10 @@ class DifyClient:
             # 尝试提取错误响应
             error_response = {}
             try:
-                if hasattr(e, 'response') and e.response is not None:
+                if hasattr(e, "response") and e.response is not None:
                     error_response = e.response.json()
             except ValueError:
-                if hasattr(e, 'response') and e.response is not None:
+                if hasattr(e, "response") and e.response is not None:
                     error_response = {"text": e.response.text}
 
             self.logger.error(f"Error response: {error_response}")
@@ -235,8 +234,6 @@ class DifyClient:
         dataset_id: str,
         file_path: str,
         indexing_technique: str = "high_quality",
-        segmentation: Optional[Dict[str, Union[str, int]]] = None,
-        retrieval_model: Optional[str] = None,
     ) -> Dict:
         """
         上传文件作为文档
@@ -257,19 +254,26 @@ class DifyClient:
         # 构建处理规则配置
         rule_config = {
             "indexing_technique": indexing_technique,
-            "doc_form": "text_model",
+            "doc_form": "hierarchical_model",
+            "doc_language": "Chinese",
             # 自动规则处理
-            "process_rule": {
-                "mode": "automatic",
-            },
+            "process_rule": EMBEDDING_PROCESS_PARENT_RULE,
             "retrieval_model": {
-                "search_method": "hybrid_search",
                 "reranking_enable": True,
+                "search_method": "hybrid_search",
+                "reranking_mode": "reranking_model",
                 "top_k": 5,
                 "reranking_model": EMBEDDING_PROVIDER_DICT["reranking_model"],
                 "score_threshold_enabled": False,
                 "score_threshold": 0.5,
             },
+            "weight_type": "customized",
+            "vector_setting": {
+                "vector_weight": 0.7,
+                "embedding_provider_name": EMBEDDING_PROVIDER_DICT["embedding_model_provider"],
+                "embedding_model_name": EMBEDDING_PROVIDER_DICT["embedding_model"],
+            },
+            "keyword_setting": {"keyword_weight": 0.3},
             "embedding_model": EMBEDDING_PROVIDER_DICT["embedding_model"],
             "embedding_model_provider": EMBEDDING_PROVIDER_DICT["embedding_model_provider"],
         }
@@ -281,20 +285,19 @@ class DifyClient:
         file_type = filename.split(".")[-1].lower()
         file_size_limit = AttachmentSizeLimit.get(file_type, None)
         if file_size_limit is not None and os.path.getsize(file_path) > file_size_limit:
-            self.logger.error(f"File size exceeds limit: {os.path.getsize(file_path)} > {file_size_limit}")
+            self.logger.error(
+                f"File size exceeds limit: {os.path.getsize(file_path)} > {file_size_limit}"
+            )
             raise ValueError(f"File size exceeds limit: {file_size_limit}")
 
         # 准备请求数据
-        data = {'data': json.dumps(rule_config, ensure_ascii=False)}
+        data = {"data": json.dumps(rule_config, ensure_ascii=False)}
 
         # 打开文件并发送请求
-        with open(file_path, 'rb') as file_obj:
-            files = {'file': (filename, file_obj, 'application/octet-stream')}
+        with open(file_path, "rb") as file_obj:
+            files = {"file": (filename, file_obj, "application/octet-stream")}
             return self._make_request(
-                "POST", 
-                f"/datasets/{dataset_id}/document/create-by-file", 
-                data=data, 
-                files=files
+                "POST", f"/datasets/{dataset_id}/document/create-by-file", data=data, files=files
             )
 
     def upload_multiple_files(

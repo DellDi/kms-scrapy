@@ -3,11 +3,8 @@
 """
 import os
 import logging
-import json
 from typing import Dict, List, Optional
-import glob
 import re
-from pathlib import Path
 
 from ..api.client import DifyClient
 from ..config import MAX_DOCS_PER_DATASET, DATASET_NAME_PREFIX, DATASET_NAME_PATTERN
@@ -118,7 +115,7 @@ class DatasetManager:
             Dict: 新创建的数据集信息
         """
         name = f"{DATASET_NAME_PREFIX}-{self._dataset_number}"
-        description = f"知识管理系统文档库 #{self._dataset_number}"
+        description = f"Newsee-Knowledge-Base-Auto-Manager #{self._dataset_number}"
         return self.client.create_dataset(name, description)
 
     def get_current_dataset(self) -> Dict:
@@ -181,7 +178,6 @@ class DatasetManager:
         self,
         file_paths: List[str],
         indexing_technique: str = "high_quality",
-        process_rule: str = "custom"
     ) -> List[Dict]:
         """
         上传文件，自动处理数据集容量
@@ -215,7 +211,6 @@ class DatasetManager:
                     self._current_dataset["id"],
                     file_path,
                     indexing_technique,
-                    process_rule
                 )
                 results.append(result)
                 self.logger.info(f"成功上传文件: {os.path.basename(file_path)}")

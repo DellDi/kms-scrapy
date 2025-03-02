@@ -74,7 +74,8 @@ class ExporterConfig:
 class AttachmentFilterConfig:
     """附件过滤配置"""
 
-    """支持 TXT、 MARKDOWN、 MDX、 PDF、 HTML、 XLSX、 XLS、 DOCX、 CSV、 MD、 HTM，每个文件不超过 15MB。"""
+    """xls 存在问题 csv不要"""
+    """支持 TXT、 MARKDOWN、 MDX、 PDF、 HTML、 XLSX、 DOCX、  MD、 HTM，每个文件不超过 15MB。"""
     included_extensions: tuple[str] = (
         "txt",
         "md",
@@ -83,9 +84,7 @@ class AttachmentFilterConfig:
         "pdf",
         "html",
         "xlsx",
-        "xls",
         "docx",
-        "csv",
         "md",
         "htm",
     )

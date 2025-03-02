@@ -102,7 +102,7 @@ def process_documents(client: DifyClient) -> Optional[bool]:
         if files_to_upload:
             logger.info(f"开始上传 {len(files_to_upload)} 个文件...")
             results = dataset_manager.upload_files(
-                files_to_upload, indexing_technique="high_quality", process_rule="custom"
+                files_to_upload, indexing_technique="high_quality"
             )
             successful_uploads = len([r for r in results if r is not None])
             logger.info(f"成功上传 {successful_uploads} 个文件")
