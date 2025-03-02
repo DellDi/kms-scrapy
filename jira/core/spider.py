@@ -462,14 +462,14 @@ class JiraSpider:
             logger.debug(f"Response content: {response.text[:1000]}...")
             raise ParseError(f"解析问题详情失败: {str(e)}") from e
 
-    def crawl(self) -> Generator[JiraIssue, None, None]:
+    def crawl(self, start_at: int = 0, page_size: int = 500, output_dir: str = "output-jira") -> Generator[JiraIssue, None, None]:
         """
         爬取Jira问题
 
         Yields:
             JiraIssue: 问题数据对象
         """
-        start_index = 0
+        start_index = start_at
 
         while True:
             try:
@@ -478,9 +478,9 @@ class JiraSpider:
                 issue_keys, pagination = self.get_issue_table(start_index)
 
                 # 计算当前分页目录
-                current_page = (start_index // config.spider.page_size) + 1
+                current_page = (start_index // page_size) + 1
                 page_dir = os.path.join(
-                    config.exporter.output_dir, f"{config.exporter.page_dir_prefix}{current_page}"
+                    output_dir, f"{config.exporter.page_dir_prefix}{current_page}"
                 )
 
                 # 获取每个问题的详情
@@ -500,7 +500,7 @@ class JiraSpider:
                     break
 
                 # 更新起始索引
-                start_index += pagination.get("maxResults", config.spider.page_size)
+                start_index += pagination.get("maxResults", page_size)
                 logger.info(f"处理下一页，新的起始索引: {start_index}")
 
             except Exception as e:

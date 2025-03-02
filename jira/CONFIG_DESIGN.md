@@ -43,7 +43,6 @@ class OptimizerConfig:
 class ExporterConfig:
     output_dir: str = "output-jira"  # 输出根目录
     page_dir_prefix: str = "page"    # 分页目录前缀
-    encoding: str = "utf-8"          # 文件编码
 
 @dataclass
 class Config:
@@ -79,7 +78,6 @@ config = Config()
 ### 2.4 导出器配置 (ExporterConfig)
 - output_dir: 输出目录路径
 - page_dir_prefix: 分页目录名称前缀
-- encoding: 文件编码格式
 
 ## 3. 配置加载机制
 

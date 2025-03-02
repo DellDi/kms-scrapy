@@ -21,10 +21,10 @@ class ExportError(Exception):
 class DocumentExporter:
     """文档导出处理类"""
 
-    def __init__(self):
+    def __init__(self, output_dir: str, encoding: str = "utf-8"):
         """初始化导出器"""
-        self.base_dir = config.exporter.output_dir
-        self.encoding = config.exporter.encoding
+        self.base_dir = output_dir
+        self.encoding = encoding
 
     def _ensure_directory(self, directory: str):
         """

@@ -14,7 +14,7 @@ DATASET_NAME_PATTERN = rf"{DATASET_NAME_PREFIX}-(\d+)"  # 数据集名称匹配�
 MAX_DOCS_PER_DATASET = 12000  # 每个数据集的最大文档数量
 
 # 文件和目录配置
-DEFAULT_INPUT_DIR = "output-jira"  # 默认从output目录读取文件
+DEFAULT_INPUT_DIR = "output-kms"  # 默认从output目录读取文件
 
 # 嵌入模型提供商字典 - 高质量 - 嵌入模型和重排序模型
 EMBEDDING_PROVIDER_DICT = {

@@ -24,6 +24,9 @@ dependencies = [
     "openai>=1.65.1",
     "python-magic-bin>=0.4.14; platform_system == 'Windows'",
     "html2text>=2024.2.26",  # HTML转Markdown支持
+    "fastapi>=0.100.0",       # API框架
+    "uvicorn>=0.23.0",        # ASGI服务器
+    "sqlalchemy>=2.0.0",      # ORM框架
 ]
 
 windows = ["python-magic-bin>=0.4.14"]
