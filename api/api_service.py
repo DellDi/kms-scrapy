@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from api.models.request import CrawlRequest
 from api.models.response import TaskStatus, TaskResponse, CallbackResponse
-from api.database.db import get_db, init_db
+from api.database.db import get_db, init_db, SessionLocal
 from api.database.models import ApiLog, Task
 from api.middleware import APILoggingMiddleware
 
@@ -131,69 +131,92 @@ def update_task_status(
         message=task.message or ""
     )
 
-async def run_crawler(task_id: UUID, db: Session) -> None:
+async def run_crawler(task_id: UUID, _: Session) -> None:
     """异步运行爬虫任务."""
-    task = get_task_by_id(task_id, db)
-    if not task:
-        logger.error(f"Task not found: {task_id}")
-        return
-
     try:
-        # 更新任务状态为运行中
-        update_task_status(
-            task=task,
-            status="running",
-            message="Crawler is running",
-            db=db
-        )
+        # 创建新的数据库会话
+        db = SessionLocal()
+        try:
+            # 重新获取任务对象
+            task = get_task_by_id(task_id, db)
+            if not task:
+                logger.error(f"Task not found: {task_id}")
+                return
 
-        # 构建命令
-        cmd = [
-            "uv", "run", "jira/main.py",
-            "--jql", task.jql,
-            "--output_dir", task.output_dir,
-            "--callback_url", f"http://localhost:8000/api/jira/callback/{task_id}"
-        ]
-
-        # 异步执行爬虫命令
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
-        )
-
-        # 等待进程完成
-        stdout, stderr = await process.communicate()
-
-        if process.returncode != 0:
-            # 爬虫执行失败
+            # 更新任务状态为运行中
             update_task_status(
                 task=task,
-                status="failed",
-                message=f"Crawler failed: {stderr.decode()}",
-                error=stderr.decode(),
+                status="running",
+                message="Crawler is running",
                 db=db
             )
-        else:
-            # 爬虫执行成功
-            update_task_status(
-                task=task,
-                status="completed",
-                message="Crawler completed successfully",
-                db=db
+
+            # 构建命令
+            cmd = [
+                "uv", "run", "jira/main.py",
+                "--jql", task.jql,
+                "--output_dir", task.output_dir,
+                "--callback_url", f"http://localhost:8000/api/jira/callback/{task_id}"
+            ]
+
+            # 异步执行爬虫命令
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
             )
+
+            # 等待进程完成
+            stdout, stderr = await process.communicate()
+
+            # 重新获取任务对象（避免会话过期）
+            task = get_task_by_id(task_id, db)
+            if not task:
+                logger.error(f"Task not found after execution: {task_id}")
+                return
+
+            if process.returncode != 0:
+                # 爬虫执行失败
+                update_task_status(
+                    task=task,
+                    status="failed",
+                    message=f"Crawler failed: {stderr.decode()}",
+                    error=stderr.decode(),
+                    db=db
+                )
+            else:
+                # 爬虫执行成功
+                update_task_status(
+                    task=task,
+                    status="completed",
+                    message="Crawler completed successfully",
+                    db=db
+                )
+
+        finally:
+            db.close()
 
     except Exception as e:
         # 捕获其他异常
         error_msg = str(e)
         logger.error(f"Crawler execution failed: {error_msg}")
-        update_task_status(
-            task=task,
-            status="failed",
-            message=f"Error: {error_msg}",
-            error=error_msg,
-            db=db
-        )
+        try:
+            # 创建新的数据库会话来记录错误
+            error_db = SessionLocal()
+            try:
+                task = get_task_by_id(task_id, error_db)
+                if task:
+                    update_task_status(
+                        task=task,
+                        status="failed",
+                        message=f"Error: {error_msg}",
+                        error=error_msg,
+                        db=error_db
+                    )
+            finally:
+                error_db.close()
+        except Exception as e2:
+            logger.error(f"Failed to record error status: {e2}")
 
 @app.post(
     "/api/jira/crawl",
