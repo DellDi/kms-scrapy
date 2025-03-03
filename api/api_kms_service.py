@@ -5,23 +5,27 @@ import shutil
 import asyncio
 import tempfile
 import logging
-import uvicorn
+
 from datetime import datetime
 from typing import Optional, List
 from uuid import UUID, uuid4
 
-from fastapi import Depends, HTTPException, Query
+from fastapi import Depends, HTTPException, Query, APIRouter
 from fastapi.responses import FileResponse
 from sqlmodel import Session, select
 
 from api.database.models import Task
 from api.database.db import get_db, engine
-from api.models.request import  CrawlKMSRequest
+from api.models.request import CrawlKMSRequest
 from api.models.response import TaskStatus, TaskResponse, TaskList, BinaryFileSchema
-from api.api_service import app, TEMP_DIR
+from api.api_service import TEMP_DIR
 
 # 配置日志
 logger = logging.getLogger(__name__)
+
+
+router = APIRouter(prefix="/api/kms", tags=["爬虫任务-kms"])
+
 
 # 根据ID获取任务
 def get_kms_task_by_id(task_id: UUID, db: Session):
@@ -43,7 +47,7 @@ def create_kms_task(
         status="pending",
         jql=start_url,  # 使用jql字段存储起始URL
         output_dir=output_dir,
-        start_time=datetime.now(),
+        start_time=datetime.now().timestamp(),  # 转换为时间戳
         callback_url=callback_url,
     )
     db.add(task)
@@ -83,10 +87,9 @@ def update_kms_task_status(
     return task
 
 
-@app.post(
-    "/api/kms/crawl",
+@router.post(
+    "/crawl",
     response_model=TaskResponse,
-    tags=["爬虫任务-kms"],
 )
 async def start_kms_crawl(request: CrawlKMSRequest, db: Session = Depends(get_db)) -> Task:
     """启动KMS爬虫任务."""
@@ -100,10 +103,10 @@ async def start_kms_crawl(request: CrawlKMSRequest, db: Session = Depends(get_db
     # 创建任务记录
     task = create_kms_task(
         task_id=task_id,
-        start_url=request.jql,  # 使用jql字段存储起始URL
+        start_url=request.start_url,
         output_dir=output_dir,
-        callback_url=request.callback_url,
         db=db,
+        callback_url=f"http://localhost:8000/api/kms/callback/{task_id}",
     )
 
     # 异步启动爬虫
@@ -139,10 +142,10 @@ async def run_kms_crawler(task_id: UUID, start_url: str, **kwargs) -> None:
                 "uv",
                 "run",
                 "crawler/main.py",
-                "--output_dir",
-                output_dir,
                 "--start_url",
                 start_url,
+                "--output_dir",
+                output_dir,
                 "--callback_url",
                 f"http://localhost:8000/api/kms/callback/{task_id}",
             ]
@@ -158,11 +161,10 @@ async def run_kms_crawler(task_id: UUID, start_url: str, **kwargs) -> None:
                 *crawler_cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                text=True,
             )
 
             # 等待爬虫完成
-            stdout, stderr = process.communicate()
+            stdout, stderr = await process.communicate()
 
             # 检查爬虫执行结果
             if process.returncode != 0:
@@ -178,7 +180,9 @@ async def run_kms_crawler(task_id: UUID, start_url: str, **kwargs) -> None:
                 )
             else:
                 # 爬虫执行成功
-                update_kms_task_status(task=task, status="completed", message="KMS爬虫任务已完成", db=db)
+                update_kms_task_status(
+                    task=task, status="completed", message="KMS爬虫任务已完成", db=db
+                )
 
     except Exception as e:
         # 捕获其他异常
@@ -190,16 +194,19 @@ async def run_kms_crawler(task_id: UUID, start_url: str, **kwargs) -> None:
                 task = get_kms_task_by_id(task_id, error_db)
                 if task:
                     update_kms_task_status(
-                        task=task, status="failed", message="爬虫执行失败", error=error_msg, db=error_db
+                        task=task,
+                        status="failed",
+                        message="爬虫执行失败",
+                        error=error_msg,
+                        db=error_db,
                     )
         except Exception as e2:
             logger.error(f"更新任务状态失败：{e2}")
 
 
-@app.get(
-    "/api/kms/task/{task_id}",
+@router.get(
+    "/task/{task_id}",
     response_model=TaskStatus,
-    tags=["爬虫任务-kms"],
 )
 async def get_kms_task_status(task_id: UUID, db: Session = Depends(get_db)) -> TaskStatus:
     """获取KMS任务状态."""
@@ -216,10 +223,9 @@ async def get_kms_task_status(task_id: UUID, db: Session = Depends(get_db)) -> T
     )
 
 
-@app.get(
-    "/api/kms/tasks",
+@router.get(
+    "/tasks",
     response_model=TaskList,
-    tags=["爬虫任务-kms"],
 )
 async def list_kms_tasks(
     skip: int = Query(0, description="跳过记录数"),
@@ -254,7 +260,7 @@ async def list_kms_tasks(
     )
 
 
-@app.post("/api/kms/callback/{task_id}", tags=["爬虫任务-kms"], include_in_schema=False)
+@router.post("/callback/{task_id}", include_in_schema=False)
 async def kms_task_callback(task_id: UUID, db: Session = Depends(get_db)) -> dict:
     """KMS爬虫任务回调."""
     task = get_kms_task_by_id(task_id, db)
@@ -266,9 +272,8 @@ async def kms_task_callback(task_id: UUID, db: Session = Depends(get_db)) -> dic
     return {"status": "received"}
 
 
-@app.get(
-    "/api/kms/download/{task_id}",
-    tags=["爬虫任务-kms"],
+@router.get(
+    "/download/{task_id}",
     response_class=FileResponse,
     responses={200: {"model": BinaryFileSchema, "description": "返回ZIP格式的爬虫结果文件"}},
 )
@@ -321,9 +326,8 @@ async def download_kms_result(task_id: UUID, db: Session = Depends(get_db)) -> F
         raise HTTPException(status_code=500, detail=f"Download failed: {str(e)}")
 
 
-@app.delete(
-    "/api/kms/task/{task_id}",
-    tags=["爬虫任务-kms"],
+@router.delete(
+    "/task/{task_id}",
     responses={
         200: {"description": "任务已删除"},
         400: {"description": "任务尚未完成，请等待任务完成后再删除}"},
@@ -352,6 +356,3 @@ async def delete_kms_task(task_id: UUID, db: Session = Depends(get_db)) -> dict:
     db.delete(task)
     db.commit()
     return {"status": "200", "message": "任务已删除"}
-
-if __name__ == "__main__":
-    uvicorn.run("api.api_kms_service:app", host="0.0.0.0", port=8000, reload=True)

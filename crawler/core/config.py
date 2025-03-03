@@ -17,7 +17,7 @@ class AuthConfig(BaseModel):
 class SpiderConfig(BaseModel):
     """爬虫配置"""
     output_dir: str = "output-kms"
-    start_urls: list[str] = ["http://kms.new-see.com:8090"]
+    start_urls: list[str] = ["http://kms.new-see.com:8090/pages/viewpage.action?pageId=92012631"]
     download_delay: int = 4
     concurrent_requests: int = 2
     retry_times: int = 5

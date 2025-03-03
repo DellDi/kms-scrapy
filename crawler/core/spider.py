@@ -180,7 +180,6 @@ class ConfluenceSpider(scrapy.Spider):
             depth_info=depth_info,  # 传递深度信息
         )
 
-        # 使用DocumentExporter导出文档
         exporter = DocumentExporter()
         markdown_path, attachments_dir = exporter.export(kms_item)
 

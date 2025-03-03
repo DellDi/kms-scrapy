@@ -3,10 +3,11 @@ import re
 import logging
 from typing import Optional, List, Dict, Any
 from .content import KMSItem
+from .config import config
 
 class DocumentExporter:
     """文档导出器，负责将KMSItem对象导出为Markdown文件"""
-    output_dir: str = "output-kms"  # 输出根目录
+    output_dir: str = config.spider.output_dir  # 输出根目录
 
     def __init__(self, base_dir: str = None):
         self.base_dir = base_dir or os.getcwd()

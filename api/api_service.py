@@ -9,17 +9,16 @@ from datetime import datetime
 from typing import Optional, List
 from uuid import UUID, uuid4
 
-import uvicorn
-from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Depends, Query
+from fastapi import  HTTPException, Depends, Query
 from fastapi.responses import FileResponse
-from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import Session, select
+
+# 新的示例和router模式
+from fastapi import APIRouter
 
 from api.models.request import CrawlRequest
 from api.database.models import Task, ApiLog
-from api.database.db import get_db, init_db, engine
-from api.middleware import APILoggingMiddleware
+from api.database.db import get_db, engine
 from api.models.response import (
     BinaryFileSchema,
     TaskList,
@@ -30,63 +29,11 @@ from api.models.response import (
 # 配置日志
 logger = logging.getLogger(__name__)
 
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # 启动时执行
-    cleanup_task = asyncio.create_task(periodic_cleanup())
-    logger.info("启动定期清理任务")
-
-    yield
-
-    # 关闭时执行
-    cleanup_task.cancel()
-    logger.info("应用关闭，清理资源")
-
-
-# 创建FastAPI实例
-app = FastAPI(
-    title="爬虫API服务",
-    description="""
-    # 爬虫API服务文档
-
-    该服务提供了一组API接口，用于管理和控制爬虫任务。
-
-    ## 主要功能
-
-    1. **爬虫任务管理**
-       - 启动新的爬虫任务
-       - 查询任务执行状态
-       - 下载爬虫结果
-
-    2. **系统监控**
-       - API请求日志查询
-       - 任务执行状态跟踪
-    """,
-    lifespan=lifespan,
-    version="1.0.0",
-    docs_url="/api/docs",
-    redoc_url="/api/redoc",
-    openapi_url="/api/openapi.json",
-)
-
-# 添加中间件
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-app.add_middleware(APILoggingMiddleware)
+router = APIRouter(prefix="/api/jira", tags=["爬虫服务-Jira"])
 
 # 临时文件目录
 TEMP_DIR = os.path.join(os.path.dirname(__file__), "temp")
 os.makedirs(TEMP_DIR, exist_ok=True)
-
-# 初始化数据库
-init_db()
-
 
 def get_task_by_id(task_id: UUID, db: Session) -> Optional[Task]:
     """根据ID获取任务."""
@@ -142,10 +89,9 @@ def update_task_status(
     return task
 
 
-@app.post(
-    "/api/jira/crawl",
+@router.post(
+    "/crawl",
     response_model=TaskResponse,
-    tags=["爬虫任务-jira"],
 )
 async def start_crawl(request: CrawlRequest, db: Session = Depends(get_db)) -> Task:
     """启动爬虫任务."""
@@ -242,10 +188,9 @@ async def run_crawler(task_id: UUID, **kwargs) -> None:
             logger.error(f"更新任务状态失败：{e2}")
 
 
-@app.get(
-    "/api/jira/task/{task_id}",
+@router.get(
+    "/task/{task_id}",
     response_model=TaskStatus,
-    tags=["爬虫任务-jira"],
 )
 async def get_task_status(task_id: UUID, db: Session = Depends(get_db)) -> TaskStatus:
     """获取任务状态."""
@@ -261,10 +206,9 @@ async def get_task_status(task_id: UUID, db: Session = Depends(get_db)) -> TaskS
     )
 
 
-@app.get(
+@router.get(
     "/api/tasks",
     response_model=TaskList,
-    tags=["爬虫任务-jira"],
 )
 async def list_tasks(
     skip: int = Query(0, description="跳过记录数"),
@@ -299,7 +243,7 @@ async def list_tasks(
     )
 
 
-@app.post("/api/jira/callback/{task_id}", tags=["爬虫任务-jira"], include_in_schema=False)
+@router.post("/callback/{task_id}",  include_in_schema=False)
 async def task_callback(task_id: UUID, db: Session = Depends(get_db)) -> dict:
     """爬虫任务回调."""
     task = get_task_by_id(task_id, db)
@@ -311,9 +255,8 @@ async def task_callback(task_id: UUID, db: Session = Depends(get_db)) -> dict:
     return {"status": "received"}
 
 
-@app.get(
-    "/api/jira/download/{task_id}",
-    tags=["爬虫任务-jira"],
+@router.get(
+    "/download/{task_id}",
     response_class=FileResponse,
     responses={200: {"model": BinaryFileSchema, "description": "返回ZIP格式的爬虫结果文件"}},
 )
@@ -366,9 +309,8 @@ async def download_result(task_id: UUID, db: Session = Depends(get_db)) -> FileR
         raise HTTPException(status_code=500, detail=f"Download failed: {str(e)}")
 
 
-@app.delete(
-    "/api/jira/task/{task_id}",
-    tags=["爬虫任务-jira"],
+@router.delete(
+    "/task/{task_id}",
     responses={
         200: {"description": "任务已删除"},
         400: {"description": "任务尚未完成，请等待任务完成后再删除}"},
@@ -399,56 +341,3 @@ async def delete_task(task_id: UUID, db: Session = Depends(get_db)) -> dict:
     return {"status": "200", "message": "任务已删除"}
 
 
-async def periodic_cleanup():
-    while True:
-        try:
-            # 创建新的数据库会话
-            with Session(engine) as db:
-                await cleanup_old_tasks(db=db)
-                logger.info("已完成定期清理任务")
-        except Exception as e:
-            logger.error(f"定期清理任务失败: {str(e)}")
-
-        # 每7天执行一次
-        await asyncio.sleep(86400 * 7)
-
-
-async def cleanup_old_tasks(db: Session = Depends(get_db)) -> None:
-    """清理超过24小时的任务数据."""
-    cutoff_time = datetime.now().timestamp() - 86400 * 7  # 7天
-    query = select(Task).where(Task.start_time < cutoff_time)
-    old_tasks = db.exec(query).all()
-
-    for task in old_tasks:
-        task_dir = os.path.join(TEMP_DIR, str(task.id))
-        if os.path.exists(task_dir):
-            shutil.rmtree(task_dir)
-        db.delete(task)
-
-    db.commit()
-
-
-@app.get(
-    "/api/logs",
-    response_model=List[ApiLog],
-    tags=["系统监控"],
-)
-async def get_logs(
-    skip: int = Query(0, description="跳过记录数"),
-    limit: int = Query(10, description="返回记录数"),
-    path: str = Query(None, description="按路径筛选"),
-    status: int = Query(None, description="按状态码筛选"),
-    db: Session = Depends(get_db),
-) -> List[ApiLog]:
-    """获取API请求日志."""
-    query = select(ApiLog)
-    if path:
-        query = query.where(ApiLog.request_path.contains(path))
-    if status:
-        query = query.where(ApiLog.response_status == status)
-    query = query.offset(skip).limit(limit).order_by(ApiLog.created_at.desc())
-    return db.exec(query).all()
-
-
-if __name__ == "__main__":
-    uvicorn.run("api.api_service:app", host="0.0.0.0", port=8000, reload=True)
