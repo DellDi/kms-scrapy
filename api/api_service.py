@@ -10,6 +10,7 @@ from typing import Optional, List
 from uuid import UUID, uuid4
 
 import uvicorn
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Depends, Query
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -30,6 +31,20 @@ from api.models.response import (
 # 配置日志
 logger = logging.getLogger(__name__)
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 启动时执行
+    cleanup_task = asyncio.create_task(periodic_cleanup())
+    logger.info("启动定期清理任务")
+
+    yield
+
+    # 关闭时执行
+    cleanup_task.cancel()
+    logger.info("应用关闭，清理资源")
+
+
 # 创建FastAPI实例
 app = FastAPI(
     title="Jira爬虫API服务",
@@ -49,6 +64,7 @@ app = FastAPI(
        - API请求日志查询
        - 任务执行状态跟踪
     """,
+    lifespan=lifespan,
     version="1.0.0",
     docs_url="/api/docs",
     redoc_url="/api/redoc",
@@ -87,7 +103,7 @@ def create_task(
         status="pending",
         jql=jql,
         output_dir=output_dir,
-        start_time=datetime.now().timestamp(),
+        start_time=datetime.now(),
         callback_url=callback_url,
     )
     db.add(task)
@@ -238,8 +254,8 @@ async def get_task_status(task_id: UUID, db: Session = Depends(get_db)) -> TaskS
     return TaskStatus(
         task_id=task.id,
         status=task.status,
-        start_time=task.start_time,
-        end_time=task.end_time,
+        created_at=task.created_at,
+        updated_at=task.updated_at,
         message=task.message,
     )
 
@@ -269,8 +285,8 @@ async def list_tasks(
             TaskStatus(
                 task_id=t.id,
                 status=t.status,
-                start_time=t.start_time,
-                end_time=t.end_time,
+                created_at=t.created_at,
+                updated_at=t.updated_at,
                 message=t.message,
             )
             for t in tasks
@@ -348,9 +364,56 @@ async def download_result(task_id: UUID, db: Session = Depends(get_db)) -> FileR
         raise HTTPException(status_code=500, detail=f"Download failed: {str(e)}")
 
 
+@app.delete(
+    "/api/jira/task/{task_id}",
+    tags=["爬虫任务"],
+    responses={
+        200: {"description": "任务已删除"},
+        400: {"description": "任务尚未完成，请等待任务完成后再删除}"},
+    },
+)
+async def delete_task(task_id: UUID, db: Session = Depends(get_db)) -> dict:
+    """删除任务."""
+    task = get_task_by_id(task_id, db)
+    if not task:
+        raise HTTPException(status_code=404, detail="任务不存在")
+
+    # 检查任务状态
+    if task.status == "pending":
+        raise HTTPException(
+            status_code=400, detail=f"任务尚未完成，请等待任务完成后再删除。当前状态：{task.status}"
+        )
+
+    # 删除任务目录
+    task_dir = os.path.join(TEMP_DIR, str(task_id))
+    if os.path.exists(task_dir):
+        shutil.rmtree(task_dir)
+    else:
+        logger.warning(f"任务目录不存在：{task_dir}")
+
+    # 删除数据库记录
+    db.exec(Task).filter(Task.id == task_id).delete()
+    db.commit()
+    return {"status": "200", "message": "任务已删除"}
+
+
+async def periodic_cleanup():
+    while True:
+        try:
+            # 创建新的数据库会话
+            with Session(engine) as db:
+                await cleanup_old_tasks(db=db)
+                logger.info("已完成定期清理任务")
+        except Exception as e:
+            logger.error(f"定期清理任务失败: {str(e)}")
+
+        # 每7天执行一次
+        await asyncio.sleep(86400 * 7)
+
+
 async def cleanup_old_tasks(db: Session = Depends(get_db)) -> None:
     """清理超过24小时的任务数据."""
-    cutoff_time = datetime.now().timestamp() - 86400  # 24小时前
+    cutoff_time = datetime.now().timestamp() - 86400 * 7  # 7天
     query = select(Task).where(Task.start_time < cutoff_time)
     old_tasks = db.exec(query).all()
 

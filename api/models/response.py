@@ -1,8 +1,10 @@
 """响应模型定义."""
 
+import imp
 from typing import Optional, Dict, Any, List, Annotated
 from uuid import UUID
 
+from datetime import datetime
 from typing import List, Type
 from pydantic import BaseModel, Field, create_model
 
@@ -11,9 +13,10 @@ class TaskStatus(BaseModel):
     """任务状态响应."""
 
     task_id: UUID = Field(..., description="任务ID")
+    task_mode: str = Field(description="任务模式", default="jira")
     status: str = Field(..., description="任务状态(pending/running/completed/failed)")
-    start_time: float = Field(..., description="开始时间(Unix时间戳)")
-    end_time: Optional[float] = Field(None, description="结束时间(Unix时间戳)")
+    created_at: datetime = Field(..., description="创建时间")
+    updated_at: datetime = Field(..., description="更新时间")
     message: Optional[str] = Field(None, description="状态消息")
 
 
