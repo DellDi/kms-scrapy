@@ -23,3 +23,17 @@ class CrawlRequest(BaseModel):
                 "jql": "assignee = currentUser() AND resolution = Unresolved order by updated DESC"
             }
         }
+
+class CrawlKMSRequest(BaseModel):
+    """爬虫KMS请求模型."""
+
+    start_url: str = Field(..., description="起始URL")
+
+    class Config:
+        """配置."""
+
+        json_schema_extra = {
+            "example": {
+                "start_url": "http://kms.new-see.com:8090"
+            }
+        }

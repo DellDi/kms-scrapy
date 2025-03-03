@@ -36,12 +36,6 @@ class TaskList(BaseModel):
     limit: int = Field(..., description="限制数")
 
 
-class FileDownloadResponse(BaseModel):
-    file_name: str = Field(..., description="文件名")
-    file_size: int = Field(..., description="文件大小")
-    download_url: str = Field(..., description="下载URL")
-
-
 class BinaryFileSchema(BaseModel):
     """仅用于API文档展示的二进制文件模型"""
 

@@ -10,6 +10,8 @@ from scrapy.crawler import CrawlerProcess
 from scrapy.utils.project import get_project_settings
 from crawler.core.spider import ConfluenceSpider
 from core.config import config
+import requests
+
 
 def setup_logging():
     """配置日志"""
@@ -50,12 +52,30 @@ def setup_logging():
 
     return logging.getLogger(__name__)
 
+def parse_args():
+    """解析命令行参数"""
+    parser = argparse.ArgumentParser(description="Confluence爬虫")
+
+    parser.add_argument("--output_dir", type=str, default=config.spider.output_dir, help="输出目录")
+
+    parser.add_argument("--start_url", type=str, default="", help="起始Confluence知识库的URL")
+
+    parser.add_argument("--callback_url", type=str, help="回调URL")
+
+    return parser.parse_args()
+
 def main():
     """主函数"""
     try:
+        # 解析命令行参数
+        args = parse_args()
+
         # 配置日志
         logger = setup_logging()
         logger.info("开始运行Confluence爬虫...")
+
+        # 更新配置
+        config.spider.output_dir = args.output_dir
 
         # 创建输出目录
         output_dir = config.spider.output_dir
@@ -89,7 +109,7 @@ def main():
         logger.info("已创建爬虫进程")
 
         # 添加爬虫 智慧大品控-开始
-        start_url = "http://kms.new-see.com:8090/pages/viewpage.action?pageId=27363403"
+        start_url = args.start_url
         logger.info(f"添加爬虫任务: {start_url}")
         process.crawl(
             ConfluenceSpider,
@@ -111,6 +131,15 @@ def main():
         logger.info("爬虫执行完成!")
         logger.info(f"执行时间: {duration}")
         logger.info("-" * 50)
+
+        # 执行回调
+        if args.callback_url:
+            logger.info("执行成功回调...")
+            try:
+                response = requests.post(args.callback_url)
+                logger.info(f"回调响应: {response.text}")
+            except Exception as e:
+                logger.error(f"回调失败: {str(e)}")
 
     except KeyboardInterrupt:
         logger.info("\n用户中断执行")

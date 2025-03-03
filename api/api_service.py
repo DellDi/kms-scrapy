@@ -1,4 +1,4 @@
-"""Jira爬虫API服务."""
+"""爬虫API服务(Jira)主入口"""
 
 import os
 import shutil
@@ -22,7 +22,6 @@ from api.database.db import get_db, init_db, engine
 from api.middleware import APILoggingMiddleware
 from api.models.response import (
     BinaryFileSchema,
-    FileDownloadResponse,
     TaskList,
     TaskResponse,
     TaskStatus,
@@ -47,11 +46,11 @@ async def lifespan(app: FastAPI):
 
 # 创建FastAPI实例
 app = FastAPI(
-    title="Jira爬虫API服务",
+    title="爬虫API服务",
     description="""
-    # Jira爬虫API服务文档
+    # 爬虫API服务文档
 
-    该服务提供了一组API接口，用于管理和控制Jira爬虫任务。
+    该服务提供了一组API接口，用于管理和控制爬虫任务。
 
     ## 主要功能
 
@@ -91,8 +90,10 @@ init_db()
 
 def get_task_by_id(task_id: UUID, db: Session) -> Optional[Task]:
     """根据ID获取任务."""
-    return db.get(Task, task_id)
-
+    task = db.get(Task, task_id)
+    if task and task.task_mode == "jira":
+        return task
+    return None
 
 def create_task(
     task_id: UUID, jql: str, output_dir: str, callback_url: Optional[str], db: Session
@@ -144,7 +145,7 @@ def update_task_status(
 @app.post(
     "/api/jira/crawl",
     response_model=TaskResponse,
-    tags=["爬虫任务"],
+    tags=["爬虫任务-jira"],
 )
 async def start_crawl(request: CrawlRequest, db: Session = Depends(get_db)) -> Task:
     """启动爬虫任务."""
@@ -244,7 +245,7 @@ async def run_crawler(task_id: UUID, **kwargs) -> None:
 @app.get(
     "/api/jira/task/{task_id}",
     response_model=TaskStatus,
-    tags=["爬虫任务"],
+    tags=["爬虫任务-jira"],
 )
 async def get_task_status(task_id: UUID, db: Session = Depends(get_db)) -> TaskStatus:
     """获取任务状态."""
@@ -263,7 +264,7 @@ async def get_task_status(task_id: UUID, db: Session = Depends(get_db)) -> TaskS
 @app.get(
     "/api/tasks",
     response_model=TaskList,
-    tags=["爬虫任务"],
+    tags=["爬虫任务-jira"],
 )
 async def list_tasks(
     skip: int = Query(0, description="跳过记录数"),
@@ -284,6 +285,7 @@ async def list_tasks(
         tasks=[
             TaskStatus(
                 task_id=t.id,
+                task_mode=t.task_mode,
                 status=t.status,
                 created_at=t.created_at,
                 updated_at=t.updated_at,
@@ -297,12 +299,12 @@ async def list_tasks(
     )
 
 
-@app.post("/api/jira/callback/{task_id}", tags=["爬虫任务"], include_in_schema=False)
+@app.post("/api/jira/callback/{task_id}", tags=["爬虫任务-jira"], include_in_schema=False)
 async def task_callback(task_id: UUID, db: Session = Depends(get_db)) -> dict:
     """爬虫任务回调."""
     task = get_task_by_id(task_id, db)
     if not task:
-        raise HTTPException(status_code=404, detail="任务不存在，请重新建立")
+        raise HTTPException(status_code=404, detail="任务不存在")
 
     update_task_status(task=task, status="completed", message="任务已完成", db=db)
 
@@ -311,7 +313,7 @@ async def task_callback(task_id: UUID, db: Session = Depends(get_db)) -> dict:
 
 @app.get(
     "/api/jira/download/{task_id}",
-    tags=["爬虫任务"],
+    tags=["爬虫任务-jira"],
     response_class=FileResponse,
     responses={200: {"model": BinaryFileSchema, "description": "返回ZIP格式的爬虫结果文件"}},
 )
@@ -366,7 +368,7 @@ async def download_result(task_id: UUID, db: Session = Depends(get_db)) -> FileR
 
 @app.delete(
     "/api/jira/task/{task_id}",
-    tags=["爬虫任务"],
+    tags=["爬虫任务-jira"],
     responses={
         200: {"description": "任务已删除"},
         400: {"description": "任务尚未完成，请等待任务完成后再删除}"},

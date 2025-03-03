@@ -33,6 +33,7 @@ class Task(SQLModel, table=True):
     __tablename__ = "tasks"
 
     id: UUID = Field(..., primary_key=True, description="任务ID")
+    task_mode: str = Field(default="jira", description="任务模式(jira/kms)")
     status: str = Field(default="pending", description="任务状态(pending/running/completed/failed)")
     jql: str = Field(
         description="JQL查询条件",
