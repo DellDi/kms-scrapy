@@ -20,6 +20,11 @@ from api.database.models import Task
 from api.middleware import APILoggingMiddleware
 from api.database.db import get_db, init_db, engine
 
+# 从环境变量获取API根路径，默认为空字符串
+API_ROOT_PATH = os.getenv("API_ROOT_PATH", "")
+API_ROOT_PORT = os.getenv("API_ROOT_PORT", "8000")
+API_ROOT_PORT = int(API_ROOT_PORT)
+
 # 创建logs目录（如果不存在）
 log_dir = "logs-api"
 if not os.path.exists(log_dir):
@@ -106,6 +111,7 @@ app = FastAPI(
     docs_url="/api/docs",
     redoc_url="/api/redoc",
     openapi_url="/api/openapi.json",
+    root_path=API_ROOT_PATH  # 使用环境变量设置根路径
 )
 
 # 添加中间件
@@ -130,11 +136,14 @@ app.include_router(kms_router)
 
 
 # 链接加粗
-link_doc = "\033[1mhttp://localhost:8000/api/docs\033[0m"
-link_redoc = "\033[1mhttp://localhost:8000/api/redoc\033[0m"
+base_url = f"http://localhost:{API_ROOT_PORT}{API_ROOT_PATH}"
+link_doc = f"\033[1m{base_url}/api/docs\033[0m"
+link_redoc = f"\033[1m{base_url}/api/redoc\033[0m"
 logger.info(f"访问API文档: {link_doc}")
 logger.info(f"访问API文档: {link_redoc}")
 
-
+# 默认8000端口，支持外部端口号定义
 if __name__ == "__main__":
-    uvicorn.run("api.main:app", host="localhost", port=8000, reload=True)
+    uvicorn.run(
+        "api.main:app", host="localhost", port=API_ROOT_PORT, reload=True, root_path=API_ROOT_PATH
+    )
