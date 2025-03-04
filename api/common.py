@@ -7,7 +7,7 @@ from sqlmodel import Session, select
 from api.database.db import get_db
 from api.database.models import ApiLog
 
-router = APIRouter(prefix="/api/common", tags=["系统监控"])
+router = APIRouter(prefix="/api/common")
 
 
 @router.get(

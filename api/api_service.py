@@ -51,7 +51,7 @@ def create_task(
         status="pending",
         jql=jql,
         output_dir=output_dir,
-        start_time=datetime.now(),
+        start_time=datetime.now().timestamp(),
         callback_url=callback_url,
     )
     db.add(task)

@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from bs4 import BeautifulSoup
 import textwrap
 import re
 import json
@@ -8,7 +7,7 @@ import logging
 import html2text
 from datetime import datetime
 from typing import Optional, Generator, Dict, Any, Union
-from .config import config
+from crawler.core.config import config
 
 
 class ContentOptimizer(ABC):

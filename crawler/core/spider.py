@@ -4,7 +4,7 @@ from bs4 import BeautifulSoup
 from datetime import datetime
 
 from .auth import AuthManager
-from .config import config
+from crawler.core.config import config
 from .content import ContentParser, KMSItem
 from .exporter import DocumentExporter
 from .optimizer import OptimizerFactory

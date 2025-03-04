@@ -1,7 +1,7 @@
 from typing import Dict, Any
 from scrapy.http import Request, FormRequest
 import base64
-from .config import config
+from crawler.core.config import config
 
 
 class AuthManager:

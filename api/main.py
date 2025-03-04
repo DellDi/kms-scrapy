@@ -7,12 +7,11 @@ import shutil
 from datetime import datetime
 
 from fastapi import FastAPI, Depends
-from api.api_service import TEMP_DIR
 from fastapi.middleware.cors import CORSMiddleware
 
 from contextlib import asynccontextmanager
 
-from api.api_service import router as jira_router
+from api.api_service import router as jira_router, TEMP_DIR
 from api.api_kms_service import router as kms_router
 from api.common import router as common_router
 from sqlmodel import Session, select
@@ -29,13 +28,14 @@ if not os.path.exists(log_dir):
 logging.basicConfig(
     level=logging.DEBUG,
     handlers=[
-        logging.StreamHandler(sys.stdout),  # 输出到控制台
+        # logging.StreamHandler(sys.stdout),  # 输出到控制台
         logging.FileHandler(os.path.join(log_dir, "api.log"), encoding="utf-8"),  # 输出到文件
     ],
 )
 
 # 使用uvicorn的日志记录器
 logger = logging.getLogger("uvicorn")
+
 
 async def periodic_cleanup():
     while True:
@@ -118,7 +118,8 @@ app.add_middleware(
 )
 app.add_middleware(APILoggingMiddleware)
 
-@app.get("/", tags=["根路径"])
+
+@app.get("/", tags=["根路径"], include_in_schema=False)
 def get_root():
     return {"message": "Welcome to the API"}
 
@@ -128,9 +129,12 @@ app.include_router(jira_router)
 app.include_router(kms_router)
 
 
-logger.info("访问API文档: http://localhost:8000/api/redoc")
-logger.info("访问API文档: http://localhost:8000/api/doc")
+# 链接加粗
+link_doc = "\033[1mhttp://localhost:8000/api/docs\033[0m"
+link_redoc = "\033[1mhttp://localhost:8000/api/redoc\033[0m"
+logger.info(f"访问API文档: {link_doc}")
+logger.info(f"访问API文档: {link_redoc}")
+
 
 if __name__ == "__main__":
     uvicorn.run("api.main:app", host="localhost", port=8000, reload=True)
-    logger.info("服务器访问地址: http://localhost:8000")

@@ -10,7 +10,7 @@ from datetime import datetime
 from scrapy.crawler import CrawlerProcess
 from scrapy.utils.project import get_project_settings
 from crawler.core.spider import ConfluenceSpider
-from core.config import config
+from crawler.core.config import config
 import requests
 
 
@@ -59,7 +59,12 @@ def parse_args():
 
     parser.add_argument("--output_dir", type=str, default=config.spider.output_dir, help="输出目录")
 
-    parser.add_argument("--start_url", type=str, default="", help="起始Confluence知识库的URL")
+    parser.add_argument(
+        "--start_url",
+        type=str,
+        default="http://kms.new-see.com:8090/pages/viewpage.action?pageId=92012631",
+        help="起始Confluence知识库的URL",
+    )
 
     parser.add_argument("--callback_url", type=str, help="回调URL")
 
@@ -77,10 +82,9 @@ def main():
 
         # 更新配置
         config.spider.output_dir = args.output_dir
-
+        logger.info(f"输出目录: {config.spider.output_dir}")
         # 创建输出目录
         output_dir = config.spider.output_dir
-        logger.info(f"输出目录: {output_dir}")
 
         # 检查并清理旧的输出文件
         json_file = f"{output_dir}/{ConfluenceSpider.name}.json"
