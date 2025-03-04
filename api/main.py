@@ -1,11 +1,13 @@
 import asyncio
 import uvicorn
 import logging
-
+import os
+import sys
+import shutil
 from datetime import datetime
 
-
 from fastapi import FastAPI, Depends
+from api.api_service import TEMP_DIR
 from fastapi.middleware.cors import CORSMiddleware
 
 from contextlib import asynccontextmanager
@@ -19,7 +21,21 @@ from api.database.models import Task
 from api.middleware import APILoggingMiddleware
 from api.database.db import get_db, init_db, engine
 
-logger = logging.getLogger(__name__)
+# 创建logs目录（如果不存在）
+log_dir = "logs-api"
+if not os.path.exists(log_dir):
+    os.makedirs(log_dir)
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    handlers=[
+        logging.StreamHandler(sys.stdout),  # 输出到控制台
+        logging.FileHandler(os.path.join(log_dir, "api.log"), encoding="utf-8"),  # 输出到文件
+    ],
+)
+
+# 使用uvicorn的日志记录器
+logger = logging.getLogger("uvicorn")
 
 async def periodic_cleanup():
     while True:
@@ -92,7 +108,6 @@ app = FastAPI(
     openapi_url="/api/openapi.json",
 )
 
-
 # 添加中间件
 app.add_middleware(
     CORSMiddleware,
@@ -103,9 +118,19 @@ app.add_middleware(
 )
 app.add_middleware(APILoggingMiddleware)
 
+@app.get("/", tags=["根路径"])
+def get_root():
+    return {"message": "Welcome to the API"}
+
+
+app.include_router(common_router)
 app.include_router(jira_router)
 app.include_router(kms_router)
-app.include_router(common_router)
+
+
+logger.info("访问API文档: http://localhost:8000/api/redoc")
+logger.info("访问API文档: http://localhost:8000/api/doc")
 
 if __name__ == "__main__":
-    uvicorn.run("api.main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("api.main:app", host="localhost", port=8000, reload=True)
+    logger.info("服务器访问地址: http://localhost:8000")
