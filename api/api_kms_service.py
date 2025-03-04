@@ -240,7 +240,7 @@ async def list_kms_tasks(
     query = query.offset(skip).limit(limit).order_by(Task.created_at.desc())
 
     tasks = db.exec(query).all()
-    total = db.exec(select(Task).where(Task.task_mode == "kms")).count()
+    total = tasks.count(0)
 
     return TaskList(
         tasks=[

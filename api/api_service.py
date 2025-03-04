@@ -216,8 +216,8 @@ async def list_tasks(
     status: str = Query(None, description="按状态筛选"),
     db: Session = Depends(get_db),
 ) -> TaskList:
-    """获取任务列表."""
-    query = select(Task)
+    """获取jira任务列表."""
+    query = select(Task).where(Task.task_mode == "jira")
     if status:
         query = query.where(Task.status == status)
     query = query.offset(skip).limit(limit).order_by(Task.created_at.desc())
