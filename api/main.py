@@ -5,6 +5,7 @@ import os
 import sys
 import shutil
 from datetime import datetime
+from dotenv import load_dotenv
 
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -19,6 +20,9 @@ from sqlmodel import Session, select
 from api.database.models import Task
 from api.middleware import APILoggingMiddleware
 from api.database.db import get_db, init_db, engine
+
+# 载入环境变量
+load_dotenv()
 
 # 从环境变量获取API根路径，默认为空字符串
 API_ROOT_PATH = os.getenv("API_ROOT_PATH", "")
