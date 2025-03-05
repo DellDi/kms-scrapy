@@ -15,9 +15,10 @@ from contextlib import asynccontextmanager
 from api.api_service import router as jira_router, TEMP_DIR
 from api.api_kms_service import router as kms_router
 from api.common import router as common_router
+from api.dify_service import router as dify_router
 from sqlmodel import Session, select
 
-from api.database.models import Task
+from api.database.models import Task, DifyTask
 from api.middleware import APILoggingMiddleware
 from api.database.db import get_db, init_db, engine
 
@@ -52,6 +53,7 @@ async def periodic_cleanup():
             # 创建新的数据库会话
             with Session(engine) as db:
                 await cleanup_old_tasks(db=db)
+                await cleanup_old_dify_tasks(db=db)
                 logger.info("已完成定期清理任务")
         except Exception as e:
             logger.error(f"定期清理任务失败: {str(e)}")
@@ -70,6 +72,25 @@ async def cleanup_old_tasks(db: Session = Depends(get_db)) -> None:
         task_dir = os.path.join(TEMP_DIR, str(task.id))
         if os.path.exists(task_dir):
             shutil.rmtree(task_dir)
+        db.delete(task)
+
+    db.commit()
+
+
+async def cleanup_old_dify_tasks(db: Session = Depends(get_db)) -> None:
+    """清理超过7天的Dify任务上传数据记录."""
+    cutoff_time = datetime.now().timestamp() - 86400 * 7  # 7天
+    query = select(DifyTask).where(DifyTask.start_time < cutoff_time)
+    old_tasks = db.exec(query).all()
+
+    for task in old_tasks:
+        task_dir = task.input_dir
+        if os.path.exists(task_dir) and os.path.isdir(task_dir):
+            try:
+                shutil.rmtree(task_dir)
+                logger.info(f"Deleted old Dify task directory: {task_dir}")
+            except Exception as e:
+                logger.error(f"Failed to delete Dify task directory: {e}")
         db.delete(task)
 
     db.commit()
@@ -106,7 +127,12 @@ app = FastAPI(
        - 查询任务执行状态
        - 下载爬虫结果
 
-    2. **系统监控**
+    2. **知识库管理**
+       - Dify知识库导入
+       - 任务状态追踪
+       - 文档处理
+
+    3. **系统监控**
        - API请求日志查询
        - 任务执行状态跟踪
     """,
@@ -137,6 +163,7 @@ def get_root():
 app.include_router(common_router)
 app.include_router(jira_router)
 app.include_router(kms_router)
+app.include_router(dify_router)
 
 
 # 链接加粗

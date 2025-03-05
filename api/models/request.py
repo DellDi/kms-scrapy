@@ -37,3 +37,27 @@ class CrawlKMSRequest(BaseModel):
                 "start_url": "http://kms.new-see.com:8090/pages/viewpage.action?pageId=92012631"
             }
         }
+
+
+class DifyUploadRequest(BaseModel):
+    """Dify 知识库导入请求模型."""
+
+    dataset_prefix: str = Field(
+        default="大品控父子检索知识库",
+        description="数据集名称前缀",
+    )
+
+    max_docs: int = Field(
+        default=12000, 
+        description="每个数据集的最大文档数量"
+    )
+
+    class Config:
+        """配置."""
+
+        json_schema_extra = {
+            "example": {
+                "dataset_prefix": "大品控父子检索知识库",
+                "max_docs": 12000
+            }
+        }

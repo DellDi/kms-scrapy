@@ -82,4 +82,4 @@ if __name__ == "__main__":
     init_database()
     print("\n数据库初始化完成！")
     print("\n你现在可以：")
-    print("启动API服务: uv run -m api.api_service")
+    print("启动API服务: uv run -m api.main")
