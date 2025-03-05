@@ -5,12 +5,13 @@ Dify 知识库导入工具
 import os
 import sys
 import logging
+import argparse
 from typing import Optional
 from datetime import datetime
 from pathlib import Path
 
 from dify import DifyClient, DatasetManager
-from config import API_KEY, BASE_URL, DEFAULT_INPUT_DIR, SUPPORTED_FILE_EXTENSIONS
+from config import API_KEY, BASE_URL, DEFAULT_INPUT_DIR, SUPPORTED_FILE_EXTENSIONS, DATASET_NAME_PREFIX, MAX_DOCS_PER_DATASET
 
 
 # 配置日志
@@ -51,22 +52,53 @@ def setup_logging():
     return logging.getLogger(__name__)
 
 
-def process_documents(client: DifyClient) -> Optional[bool]:
+def parse_args():
+    """解析命令行参数"""
+    parser = argparse.ArgumentParser(description="Dify 知识库导入工具")
+
+    parser.add_argument(
+        "--dataset-prefix",
+        type=str,
+        default=DATASET_NAME_PREFIX,
+        help=f"数据集名称前缀 (默认: {DATASET_NAME_PREFIX})"
+    )
+
+    parser.add_argument(
+        "--max-docs",
+        type=int,
+        default=MAX_DOCS_PER_DATASET,
+        help=f"每个数据集的最大文档数量 (默认: {MAX_DOCS_PER_DATASET})"
+    )
+
+    parser.add_argument(
+        "--input-dir",
+        type=str,
+        default=DEFAULT_INPUT_DIR,
+        help=f"输入目录路径 (默认: {DEFAULT_INPUT_DIR})"
+    )
+
+    return parser.parse_args()
+
+
+def process_documents(client: DifyClient, input_dir: str, max_docs: int, dataset_prefix: str) -> Optional[bool]:
     """
     处理文档上传
 
     Args:
         client: Dify客户端实例
+        input_dir: 输入目录路径
+        max_docs: 每个数据集的最大文档数量
+        dataset_prefix: 数据集名称前缀
 
     Returns:
         Optional[bool]: 处理是否成功，出错返回None
     """
     try:
-        logger.info(f"开始处理目录: {DEFAULT_INPUT_DIR}")
+        logger.info(f"开始处理目录: {input_dir}")
         start_time = datetime.now()
 
         # 创建数据集管理器
-        dataset_manager = DatasetManager(client)
+        dataset_manager = DatasetManager(client, max_docs=max_docs, dataset_prefix=dataset_prefix)
 
         # 初始化或获取当前数据集
         logger.info("初始化数据集...")
@@ -74,9 +106,9 @@ def process_documents(client: DifyClient) -> Optional[bool]:
         logger.info(f"当前使用数据集: {current_dataset['name'] if current_dataset else '新建中'}")
 
         # 获取要处理的文件列表
-        input_path = Path(DEFAULT_INPUT_DIR)
+        input_path = Path(input_dir)
         if not input_path.exists():
-            logger.error(f"输入目录不存在: {DEFAULT_INPUT_DIR}")
+            logger.error(f"输入目录不存在: {input_dir}")
             return None
 
         # 收集所有要上传的文件
@@ -143,14 +175,31 @@ def process_documents(client: DifyClient) -> Optional[bool]:
 def main():
     """主函数"""
     try:
+        # 解析命令行参数
+        args = parse_args()
+
+        # 设置全局变量
+        global DATASET_NAME_PREFIX, MAX_DOCS_PER_DATASET, DEFAULT_INPUT_DIR
+        DATASET_NAME_PREFIX = args.dataset_prefix
+        MAX_DOCS_PER_DATASET = args.max_docs
+        DEFAULT_INPUT_DIR = args.input_dir
+
         # 创建Dify客户端
         client = DifyClient(api_key=API_KEY, base_url=BASE_URL)
         logger.info("Dify客户端初始化完成")
         logger.info(f"API密钥: {'*' * 16}{API_KEY[-4:] if len(API_KEY) > 4 else API_KEY}")
         logger.info(f"API地址: {BASE_URL}")
+        logger.info(f"数据集前缀: {DATASET_NAME_PREFIX}")
+        logger.info(f"每个数据集最大文档数: {MAX_DOCS_PER_DATASET}")
         logger.info(f"输入目录: {DEFAULT_INPUT_DIR}")
+
         # 处理文档
-        success = process_documents(client)
+        success = process_documents(
+            client,
+            DEFAULT_INPUT_DIR,
+            MAX_DOCS_PER_DATASET,
+            DATASET_NAME_PREFIX
+        )
         sys.exit(0 if success else 1)
 
     except Exception as e:

@@ -12,19 +12,29 @@ from ..config import MAX_DOCS_PER_DATASET, DATASET_NAME_PREFIX, DATASET_NAME_PAT
 class DatasetManager:
     """数据集管理器"""
 
-    def __init__(self, client: DifyClient, max_docs: int = MAX_DOCS_PER_DATASET):
+    def __init__(
+        self, 
+        client: DifyClient, 
+        max_docs: int = MAX_DOCS_PER_DATASET,
+        dataset_prefix: str = DATASET_NAME_PREFIX
+    ):
         """
         初始化数据集管理器
 
         Args:
             client: Dify API 客户端
             max_docs: 每个数据集的最大文档数量
+            dataset_prefix: 数据集名称前缀
         """
         self.client = client
         self.max_docs = max_docs
+        self.dataset_prefix = dataset_prefix
         self._current_dataset = None
         self._dataset_number = 0
         self.logger = logging.getLogger(__name__)
+        
+        # 根据前缀动态生成匹配模式
+        self.dataset_name_pattern = rf"{self.dataset_prefix}-(\d+)"
 
     def initialize(self) -> Dict:
         """
@@ -94,7 +104,7 @@ class DatasetManager:
         latest_dataset = None
 
         for dataset in datasets:
-            match = re.search(DATASET_NAME_PATTERN, dataset["name"])
+            match = re.search(self.dataset_name_pattern, dataset["name"])
             if match:
                 number = int(match.group(1))
                 if number > max_number:
@@ -114,7 +124,7 @@ class DatasetManager:
         Returns:
             Dict: 新创建的数据集信息
         """
-        name = f"{DATASET_NAME_PREFIX}-{self._dataset_number}"
+        name = f"{self.dataset_prefix}-{self._dataset_number}"
         description = f"Newsee-Knowledge-Base-Auto-Manager #{self._dataset_number}"
         return self.client.create_dataset(name, description)
 
