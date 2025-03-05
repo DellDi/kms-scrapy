@@ -36,10 +36,10 @@ class Task(SQLModel, table=True):
     task_mode: str = Field(default="jira", description="任务模式(jira/kms)")
     status: str = Field(default="pending", description="任务状态(pending/running/completed/failed)")
     jql: str = Field(
-        description="JQL查询条件",
+        description="JQL查询条件 or Conflunce6.15.4知识库起始爬虫URL",
         default="assignee = currentUser() AND resolution = Unresolved order by updated DESC",
     )
-    output_dir: str = Field( description="输出目录", default="output-jira")
+    output_dir: str = Field(description="输出目录", default="output-jira")
     start_time: float = Field(..., description="开始时间(Unix时间戳)")
     end_time: Optional[float] = Field(None, description="结束时间(Unix时间戳)")
     message: Optional[str] = Field(None, description="状态消息")

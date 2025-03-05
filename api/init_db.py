@@ -82,7 +82,4 @@ if __name__ == "__main__":
     init_database()
     print("\n数据库初始化完成！")
     print("\n你现在可以：")
-    print("1. 启动API服务: uv run -m api.api_service")
-    print("2. 访问API文档: http://localhost:8000/api/redoc")
-    print("3. 查看任务列表: http://localhost:8000/api/tasks")
-    print("4. 查看日志记录: http://localhost:8000/api/logs")
+    print("启动API服务: uv run -m api.api_service")
