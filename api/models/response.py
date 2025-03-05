@@ -75,3 +75,11 @@ class DifyTaskList(BaseModel):
     total: int = Field(..., description="总数")
     skip: int = Field(..., description="跳过数")
     limit: int = Field(..., description="限制数")
+
+
+class JiraITOPSResponse(BaseModel):
+    """Jira ITOPS工单创建响应."""
+
+    url: str = Field(..., description="工单URL")
+    message: str = Field(..., description="状态消息")
+    issue_key: Optional[str] = Field(None, description="工单编号")

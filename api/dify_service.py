@@ -4,6 +4,9 @@ import os
 import shutil
 import asyncio
 import logging
+import json
+import requests
+import re
 from datetime import datetime
 from typing import Optional, List
 from uuid import UUID
@@ -14,18 +17,14 @@ from sqlmodel import Session, select
 
 from fastapi import APIRouter
 
-from api.models.request import DifyUploadRequest
+from api.models.request import DifyUploadRequest, JiraITOPSRequest
 from api.database.models import DifyTask, Task
 from api.database.db import get_db, engine
-from api.models.response import (
-    DifyTaskStatus,
-    DifyTaskResponse,
-    DifyTaskList,
-)
+from api.models.response import DifyTaskStatus, DifyTaskResponse, DifyTaskList, JiraITOPSResponse
 from api.api_service import TEMP_DIR
 
 # 配置日志
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("uvicorn")
 
 router = APIRouter(prefix="/api/dify", tags=["知识库服务-Dify"])
 
@@ -41,11 +40,7 @@ def get_task_by_id(task_id: UUID, db: Session) -> Optional[Task]:
 
 
 def create_dify_task(
-    task_id: UUID,
-    crawler_task_id: UUID,
-    dataset_prefix: str,
-    max_docs: int,
-    db: Session
+    task_id: UUID, crawler_task_id: UUID, dataset_prefix: str, max_docs: int, db: Session
 ) -> DifyTask:
     """创建新的Dify任务."""
     # 获取爬虫任务的输出目录路径
@@ -65,7 +60,7 @@ def create_dify_task(
         dataset_prefix=dataset_prefix,
         max_docs=max_docs,
         start_time=datetime.now().timestamp(),
-        extra_data={"crawler_task_id": str(crawler_task_id)}  # 记录关联的爬虫任务ID
+        extra_data={"crawler_task_id": str(crawler_task_id)},  # 记录关联的爬虫任务ID
     )
     db.add(task)
     db.commit()
@@ -107,9 +102,7 @@ def update_dify_task_status(
     response_model=DifyTaskResponse,
 )
 async def start_dify_upload(
-    crawler_task_id: UUID,
-    request: DifyUploadRequest,
-    db: Session = Depends(get_db)
+    crawler_task_id: UUID, request: DifyUploadRequest, db: Session = Depends(get_db)
 ) -> DifyTaskResponse:
     """启动Dify知识库导入任务.
 
@@ -127,6 +120,7 @@ async def start_dify_upload(
 
     # 生成新的Dify任务ID
     from uuid import uuid4
+
     dify_task_id = uuid4()
 
     # 创建任务记录
@@ -135,7 +129,7 @@ async def start_dify_upload(
         crawler_task_id=crawler_task_id,
         dataset_prefix=request.dataset_prefix,
         max_docs=request.max_docs,
-        db=db
+        db=db,
     )
 
     # 异步启动Dify导入任务
@@ -159,7 +153,9 @@ async def run_dify_uploader(task_id: UUID, **kwargs) -> None:
                 return
 
             # 更新任务状态为运行中
-            update_dify_task_status(task=task, status="running", message="Dify uploader is running", db=db)
+            update_dify_task_status(
+                task=task, status="running", message="Dify uploader is running", db=db
+            )
 
             # 构建命令
             cmd = [
@@ -216,7 +212,7 @@ async def run_dify_uploader(task_id: UUID, **kwargs) -> None:
                     message="Dify知识库导入任务已完成",
                     total_files=total_files,
                     successful_uploads=successful_uploads,
-                    db=db
+                    db=db,
                 )
 
     except Exception as e:
@@ -332,3 +328,169 @@ async def delete_dify_task(task_id: UUID, db: Session = Depends(get_db)) -> Dify
         task_id=task_id,
         message="任务已成功删除",
     )
+
+
+@router.post(
+    "/createjiraITOPS",
+    response_model=JiraITOPSResponse,
+    summary="创建JIRA ITOPS工单",
+    description="创建JIRA ITOPS工单，需要提供创建人用户名和密码",
+)
+async def create_jira_itops(
+    request: JiraITOPSRequest,
+) -> JiraITOPSResponse:
+    """创建JIRA ITOPS工单."""
+    try:
+        # 基础URL
+        base_url = "http://bug.new-see.com:8088"
+
+        # 第一步：登录获取cookies
+        login_url = f"{base_url}/login.jsp"
+        login_data = {
+            "os_username": request.creater,
+            "os_password": request.password,
+            "os_cookie": "true",
+            "os_destination": "",
+            "user_role": "",
+            "atl_token": "",
+            "login": "登录",
+        }
+
+        # 设置请求头
+        headers = {
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6",
+            "Authorization": "Basic bmV3c2VlOm5ld3NlZQ==",
+            "Cache-Control": "max-age=0",
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Origin": base_url,
+            "Proxy-Connection": "keep-alive",
+            "Referer": f"{base_url}/login.jsp",
+            "Upgrade-Insecure-Requests": "1",
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36 Edg/133.0.0.0",
+        }
+
+        # 创建会话，保持cookies
+        session = requests.Session()
+
+        # 发送登录请求
+        login_response = session.post(
+            login_url,
+            headers=headers,
+            data=login_data,
+            allow_redirects=True,  # 允许重定向
+            verify=False,
+        )
+
+        # 检查登录是否成功
+        if login_response.status_code != 200:
+            logger.error(f"登录失败: {login_response.status_code}")
+            return JiraITOPSResponse(
+                url="", message=f"登录失败，状态码: {login_response.status_code}", issue_key=""
+            )
+
+        # 获取登录后的cookies
+        cookies = session.cookies.get_dict()
+
+        # 从cookies中提取token
+        atl_token = cookies.get("atlassian.xsrf.token", "")
+
+        logger.info(f"登录成功，获取到的cookies: {cookies}, token: {atl_token}")
+
+        # 第二步：创建工单
+        create_url = f"{base_url}/secure/QuickCreateIssue.jspa?decorator=none"
+
+        # 构建创建工单的数据
+        create_data = {
+            "pid": "11050",  # 项目ID
+            "issuetype": request.issuetype,  # 问题类型ID
+            "summary": request.summary,
+            "description": request.description,
+            "assignee": request.assignee,
+            "atl_token": atl_token,
+            "customfield_10000": "13163",
+            "customfield_12600": "15865",
+            "customfield_12600:1": "15866",
+            "priority": "3", # 优先级
+            "hasWorkStarted": "false",
+        }
+
+        # fieldsToRetain 参数需要特殊处理
+        fields_to_retain = ["project", "issuetype", "assignee", "customfield_10000", "customfield_12600", "priority"]
+
+        # 设置创建工单的请求头
+        create_headers = {
+            "Accept": "*/*",
+            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6",
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "Origin": base_url,
+            "Authorization": "Basic bmV3c2VlOm5ld3NlZQ==",
+            "Referer": f"{base_url}/secure/Dashboard.jspa",
+            "Sec-Fetch-Dest": "empty",
+            "Sec-Fetch-Mode": "cors",
+            "Sec-Fetch-Site": "same-origin",
+            "X-AUSERNAME": request.creater,
+            "X-Requested-With": "XMLHttpRequest",
+        }
+
+        # 正确处理 fieldsToRetain 参数
+        from urllib.parse import urlencode
+
+        # 构建基础参数
+        params = []
+        for key, value in create_data.items():
+            params.append((key, value))
+
+        # 添加 fieldsToRetain 参数
+        for field in fields_to_retain:
+            params.append(("fieldsToRetain", field))
+
+        # 编码参数
+        encoded_data = urlencode(params)
+
+        # 发送创建工单请求
+        create_response = session.post(
+            create_url, headers=create_headers, data=encoded_data, verify=False
+        )
+
+        logger.info(f"创建工单响应状态码: {create_response.status_code}")
+        logger.info(f"创建工单响应内容: {create_response.text[:500]}")  # 只记录前500个字符，避免日志过大
+
+        # 检查创建是否成功
+        if create_response.status_code != 200:
+            return JiraITOPSResponse(
+                url="", message=f"创建工单失败，状态码: {create_response.status_code}", issue_key=""
+            )
+
+        # 尝试解析响应JSON
+        try:
+            response_data = create_response.json()
+
+            issue_key = response_data.get("createdIssueDetails", {}).get("issueKey", "")
+
+            if not issue_key:
+                # 尝试从响应文本中提取issue key
+                match = re.search(r'"issueKey":"([^"]+)"', create_response.text)
+                if match:
+                    issue_key = match.group(1)
+        except Exception as e:
+            logger.error(f"解析响应失败: {str(e)}")
+            # 尝试从响应文本中提取issue key
+            match = re.search(r'"issueKey":"([^"]+)"', create_response.text)
+            if match:
+                issue_key = match.group(1)
+            else:
+                issue_key = ""
+
+        # 构建工单URL
+        issue_url = f"{base_url}/browse/{issue_key}" if issue_key else ""
+
+        return JiraITOPSResponse(
+            url=issue_url,
+            message="工单创建成功" if issue_key else "工单创建可能失败，无法获取工单编号",
+            issue_key=issue_key,
+        )
+
+    except Exception as e:
+        logger.error(f"创建JIRA ITOPS工单失败: {str(e)}")
+        return JiraITOPSResponse(url="", message=f"创建工单过程中发生错误: {str(e)}", issue_key="")
