@@ -9,12 +9,12 @@ API_KEY = os.getenv("DIFY_API_KEY", "your-api-key")
 BASE_URL = os.getenv("DIFY_BASE_URL", "https://api.dify.ai/v1")
 
 # 数据集配置
-DATASET_NAME_PREFIX = "大品控父子检索知识库"  # 数据集名称前缀
+DATASET_NAME_PREFIX = "智慧数据"  # 数据集名称前缀
 DATASET_NAME_PATTERN = rf"{DATASET_NAME_PREFIX}-(\d+)"  # 数据集名称匹配模式
 MAX_DOCS_PER_DATASET = 12000  # 每个数据集的最大文档数量
 
 # 文件和目录配置
-DEFAULT_INPUT_DIR = "output-kms"  # 默认从output目录读取文件
+DEFAULT_INPUT_DIR = "output-jira"  # 默认从output目录读取文件
 
 # 嵌入模型提供商字典 - 高质量 - 嵌入模型和重排序模型
 EMBEDDING_PROVIDER_DICT = {
