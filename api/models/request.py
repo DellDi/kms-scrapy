@@ -9,6 +9,10 @@ class CrawlRequest(BaseModel):
         description="JQL查询语句",
     )
 
+    description_limit: int = Field(default=400, description="问题描述截断长度")
+
+    comments_limit: int = Field(default=10, description="问题评论个数")
+
     page_size: int = Field(default=500, description="每页数量")
 
     start_at: int = Field(default=0, description="起始位置")
@@ -20,6 +24,8 @@ class CrawlRequest(BaseModel):
             "example": {
                 "page_size": 500,
                 "start_at": 0,
+                "description_limit": 400,
+                "comments_limit": 10,
                 "jql": "assignee = currentUser() AND resolution = Unresolved order by updated DESC"
             }
         }
@@ -43,12 +49,12 @@ class DifyUploadRequest(BaseModel):
     """Dify 知识库导入请求模型."""
 
     dataset_prefix: str = Field(
-        default="大品控父子检索知识库",
+        default="标准检索知识库",
         description="数据集名称前缀",
     )
 
     max_docs: int = Field(
-        default=12000, 
+        default=12000,
         description="每个数据集的最大文档数量"
     )
 

@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import Optional, List
 from uuid import UUID, uuid4
 
-from fastapi import  HTTPException, Depends, Query
+from fastapi import HTTPException, Depends, Query
 from fastapi.responses import FileResponse
 from sqlmodel import Session, select
 
@@ -35,6 +35,7 @@ router = APIRouter(prefix="/api/jira", tags=["爬虫服务-Jira"])
 TEMP_DIR = os.path.join(os.path.dirname(__file__), "temp")
 os.makedirs(TEMP_DIR, exist_ok=True)
 
+
 def get_task_by_id(task_id: UUID, db: Session) -> Optional[Task]:
     """根据ID获取任务."""
     task = db.get(Task, task_id)
@@ -42,8 +43,9 @@ def get_task_by_id(task_id: UUID, db: Session) -> Optional[Task]:
         return task
     return None
 
+
 def create_task(
-    task_id: UUID, jql: str, output_dir: str, callback_url: Optional[str], db: Session
+    task_id: UUID, jql: str, output_dir: str, callback_url: Optional[str], db: Session, **kwargs
 ) -> Task:
     """创建新任务."""
     task = Task(
@@ -53,6 +55,7 @@ def create_task(
         output_dir=output_dir,
         start_time=datetime.now().timestamp(),
         callback_url=callback_url,
+        extra_data=kwargs,
     )
     db.add(task)
     db.commit()
@@ -102,7 +105,12 @@ async def start_crawl(request: CrawlRequest, db: Session = Depends(get_db)) -> T
 
     # 创建任务记录
     task = create_task(
-        task_id=task_id, jql=request.jql, output_dir=task_dir, callback_url=None, db=db
+        task_id=task_id,
+        jql=request.jql,
+        output_dir=task_dir,
+        callback_url=None,
+        db=db,
+        **request.model_dump(exclude={"jql"}),
     )
 
     # 异步启动爬虫任务
@@ -126,6 +134,9 @@ async def run_crawler(task_id: UUID, **kwargs) -> None:
                 return
             start_at = kwargs.get("start_at")
             page_size = kwargs.get("page_size")
+            description_limit = kwargs.get("description_limit")
+            comments_limit = kwargs.get("comments_limit")
+
             # 更新任务状态为运行中
             update_task_status(task=task, status="running", message="Crawler is running", db=db)
 
@@ -140,6 +151,10 @@ async def run_crawler(task_id: UUID, **kwargs) -> None:
                 str(start_at),
                 "--page_size",
                 str(page_size),
+                "--description_limit",
+                str(description_limit),
+                "--comments_limit",
+                str(comments_limit),
                 "--output_dir",
                 task.output_dir,
                 "--callback_url",
@@ -243,7 +258,7 @@ async def list_tasks(
     )
 
 
-@router.post("/callback/{task_id}",  include_in_schema=False)
+@router.post("/callback/{task_id}", include_in_schema=False)
 async def task_callback(task_id: UUID, db: Session = Depends(get_db)) -> dict:
     """爬虫任务回调."""
     task = get_task_by_id(task_id, db)
@@ -339,5 +354,3 @@ async def delete_task(task_id: UUID, db: Session = Depends(get_db)) -> dict:
     db.exec(Task).filter(Task.id == task_id).delete()
     db.commit()
     return {"status": "200", "message": "任务已删除"}
-
-

@@ -5,8 +5,8 @@ from concurrent import futures
 from typing import Tuple, List, Optional
 from datetime import datetime
 
-from .config import config
-from .spider import JiraIssue
+from jira.core.config import config
+from jira.core.spider import JiraIssue
 
 # 获取当前模块的日志记录器
 logger = logging.getLogger(__name__)
@@ -99,7 +99,7 @@ class DocumentExporter:
 {issue.annex_str or "（无附件内容）"}
 
 ---
-*本文档由爬虫自动生成于 {datetime.now().strftime("%Y-%m-%d %H:%M:%S")} 操作人@delldi*
+*本文档由爬虫自动生成于 {datetime.now().strftime("%Y-%m-%d %H:%M:%S")} 作者@delldi*
         """
         ).strip()
 

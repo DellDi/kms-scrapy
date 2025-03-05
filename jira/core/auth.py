@@ -3,7 +3,7 @@ import logging
 import requests
 from urllib.parse import urljoin, quote
 
-from .config import config
+from jira.core.config import config
 
 # 获取当前模块的日志记录器
 logger = logging.getLogger(__name__)
@@ -182,7 +182,7 @@ class AuthManager:
             response = session.send(prepped)
 
             logger.debug(f"Auth check response status: {response.status_code}")
-            
+
             # 如果认证有效，更新cookies并返回True
             if response.status_code == 200:
                 new_cookies = self.parse_set_cookie(response)
@@ -190,7 +190,7 @@ class AuthManager:
                     self.update_cookies(new_cookies)
                 logger.info("认证状态有效")
                 return True
-            
+
             logger.info("认证状态无效")
             return False
 
@@ -209,7 +209,7 @@ class AuthManager:
             logger.info("开始刷新认证...")
             # 登录获取新的认证信息
             session = requests.Session()
-            
+
             # 构造与浏览器一致的请求数据
             login_data = {
                 "os_username": config.auth.username,

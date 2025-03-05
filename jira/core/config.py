@@ -69,6 +69,8 @@ class ExporterConfig:
 
     output_dir: str = "output-jira"  # 输出根目录
     page_dir_prefix: str = "page"  # 分页目录前缀
+    description_limit: int = 400  # 问题描述截断长度 -1表示不限制
+    comments_limit: int = 10  # 问题评论个数 -1表示不限制
 
 
 @dataclass

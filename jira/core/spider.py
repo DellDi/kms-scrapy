@@ -7,11 +7,9 @@ import requests
 from pydantic import BaseModel, Field
 from bs4 import BeautifulSoup
 from bs4.element import Tag
-from urllib.parse import urljoin, urlencode, quote
-from pathlib import Path
 
-from .auth import AuthManager, AuthError
-from .config import config
+from jira.core.auth import AuthManager, AuthError
+from jira.core.config import config
 from crawler.core.optimizer import OptimizerFactory
 
 # 获取当前模块的日志记录器
@@ -32,7 +30,7 @@ SELECTORS = {
     "priority": "#priority-val",
     "type": "#type-val",
     "attachments": "#attachmentmodule .attachment-content .attachment-title",
-    "comments": ".issue-data-block",
+    "comments": ".issue-data-block .twixi-wrap.verbose",
 }
 
 
@@ -404,6 +402,10 @@ class JiraSpider:
                 "type_jira": extract_value(soup, SELECTORS["type"]),
                 "labels": extract_list(soup, SELECTORS["labels"]),
             }
+            # 限制描述长度
+            description_limit = config.exporter.description_limit
+            if description_limit > 0:
+                issue_data["description"] = issue_data["description"][:description_limit]
 
             # 处理附件
             attachments = []
@@ -426,6 +428,9 @@ class JiraSpider:
             issue_data["annex_str"] = "\n".join(attachments)
             issue_data["annex_urls"] = annex_urls
 
+            # 限制评论长度
+            comments_limit = config.exporter.comments_limit
+
             # 评论内容md格式
             commentsDomList = soup_comment.select(SELECTORS["comments"])
             # 只取文本的节点，不包含a标签
@@ -434,6 +439,9 @@ class JiraSpider:
                     a.decompose()
 
             commentsDomList = [str(dom) for dom in commentsDomList]
+            if comments_limit > 0:
+                commentsDomList = commentsDomList[:comments_limit]
+
             commentsDom = "\n".join(commentsDomList)
             if commentsDom:
                 # html2text 处理全部dom为md
@@ -462,7 +470,9 @@ class JiraSpider:
             logger.debug(f"Response content: {response.text[:1000]}...")
             raise ParseError(f"解析问题详情失败: {str(e)}") from e
 
-    def crawl(self, start_at: int = 0, page_size: int = 500, output_dir: str = "output-jira") -> Generator[JiraIssue, None, None]:
+    def crawl(
+        self, start_at: int = 0, page_size: int = 500, output_dir: str = "output-jira"
+    ) -> Generator[JiraIssue, None, None]:
         """
         爬取Jira问题
 

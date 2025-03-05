@@ -65,6 +65,10 @@ def parse_args():
 
     parser.add_argument("--jql", type=str, default=config.spider.jql, help="JQL查询条件")
 
+    parser.add_argument("--description_limit", type=int, default=config.exporter.description_limit, help="问题描述截断长度")
+
+    parser.add_argument("--comments_limit", type=int, default=config.exporter.comments_limit, help="问题评论个数")
+
     parser.add_argument(
         "--output_dir", type=str, default=config.exporter.output_dir, help="输出目录"
     )
@@ -88,11 +92,13 @@ def run_spider(clear_output: bool = True) -> Optional[bool]:
 
         # 创建爬虫配置
         spider_config = {
-            "page_size": args.page_size,
-            "start_at": args.start_at,
+            "page_size": int(args.page_size),
+            "start_at": int(args.start_at),
             "jql": args.jql,
             "output_dir": args.output_dir,
             "callback_url": args.callback_url,
+            "description_limit": int(args.description_limit),
+            "comments_limit": int(args.comments_limit),
         }
 
         # 初始化认证管理器
@@ -116,6 +122,8 @@ def run_spider(clear_output: bool = True) -> Optional[bool]:
         config.spider.start_at = spider_config["start_at"]
         config.spider.page_size = spider_config["page_size"]
         config.exporter.output_dir = spider_config["output_dir"]
+        config.exporter.description_limit = spider_config["description_limit"]
+        config.exporter.comments_limit = spider_config["comments_limit"]
 
         # 初始化爬虫和导出器
         spider = JiraSpider(auth_manager)

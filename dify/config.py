@@ -70,8 +70,8 @@ SUPPORTED_FILE_EXTENSIONS = [
 # 特殊类型的附件大小进行限制,枚举
 AttachmentSizeLimit = {
     "pdf": 5 * 1024 * 1024,
-    "docx": 5 * 1024 * 1024,
-    "xlsx": 20 * 1024,
-    "csv": 15 * 1024,
-    "txt": 15 * 1024,
+    "docx": 1 * 1024 * 1024,
+    "xlsx": 5 * 1024,
+    "csv": 5 * 1024,
+    "txt": 5 * 1024,
 }
