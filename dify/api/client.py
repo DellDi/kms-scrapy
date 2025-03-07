@@ -208,8 +208,10 @@ class DifyClient:
         if doc_type not in ["text", "qa_pair"]:
             raise ValueError("doc_type must be either 'text' or 'qa_pair'")
 
-        if indexing_technique not in ["high_quality", "economy"]:
-            raise ValueError("indexing_technique must be either 'high_quality' or 'economy'")
+        if indexing_technique not in ["high_quality", "economy", "parent", "qa"]:
+            raise ValueError(
+                "indexing_technique must be either 'high_quality' or 'economy' or 'parent' or 'qa'"
+            )
 
         data = {"indexing_technique": indexing_technique, "doc_type": doc_type}
 
@@ -248,16 +250,34 @@ class DifyClient:
         Returns:
             Dict: 上传结果
         """
-        if indexing_technique not in ["high_quality", "economy"]:
-            raise ValueError("indexing_technique must be either 'high_quality' or 'economy'")
+        if indexing_technique not in ["high_quality", "economy", "parent", "qa"]:
+            raise ValueError(
+                "indexing_technique must be either 'high_quality' or 'economy' or 'parent' or 'qa'"
+            )
+
+        # 枚举模式字典
+        indexing_technique_dict = {
+            "high_quality": EMBEDDING_DEFAULT_PROCESS_RULE,
+            "economy": None,
+            "parent": EMBEDDING_PROCESS_PARENT_RULE,
+            "qa": EMBEDDING_DEFAULT_PROCESS_RULE,
+        }
+
+        # 枚举文档构建的类型字典
+        doc_form_dict = {
+            "high_quality": "text_model",  # 高质量
+            "economy": "text_model",  # 经济
+            "parent": "hierarchical_model",  # 父子
+            "qa": "qa_model",  # 问答
+        }
 
         # 构建处理规则配置
         rule_config = {
             "indexing_technique": indexing_technique,
-            "doc_form": "hierarchical_model",  # hierarchical_model  qa_model
+            "doc_form": doc_form_dict[indexing_technique],
             "doc_language": "Chinese",
             # 自动规则处理
-            "process_rule": EMBEDDING_PROCESS_PARENT_RULE,
+            "process_rule": indexing_technique_dict[indexing_technique],
             "retrieval_model": {
                 "reranking_enable": True,
                 "search_method": "hybrid_search",

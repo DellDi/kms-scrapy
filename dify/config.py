@@ -26,8 +26,9 @@ EMBEDDING_PROVIDER_DICT = {
         "reranking_model_name": "BAAI/bge-reranker-v2-m3",  # BAAI/bge-reranker-v2-m3 gte-rerank
     },
     "embedding_model_provider": "siliconflow",  # siliconflow tongyi
-    "embedding_model": "BAAI/bge-large-zh-v1.5",  # BAAI/bge-large-zh-v1.5 text-embedding-v3
+    "embedding_model": "BAAI/bge-m3",  # BAAI/bge-large-zh-v1.5 bge-m3 text-embedding-v3
 }
+
 
 # 嵌入规则-高质量默认
 EMBEDDING_DEFAULT_PROCESS_RULE = {
@@ -50,7 +51,7 @@ EMBEDDING_PROCESS_PARENT_RULE = {
             {"id": "remove_urls_emails", "enabled": False},
         ],
         "segmentation": {"separator": "\n\n", "max_tokens": 500},
-        "parent_mode": "paragraph",  # full-doc, paragraph
+        "parent_mode": "full-doc",  # full-doc, paragraph
         "subchunk_segmentation": {"separator": "\n", "max_tokens": 200},
     },
 }

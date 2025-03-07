@@ -43,7 +43,7 @@ class CrawlKMSRequest(BaseModel):
 
         json_schema_extra = {
             "example": {
-                "start_url": "http://kms.new-see.com:8090/pages/viewpage.action?pageId=92012631"
+                "start_url": "http://kms.new-see.com:8090/pages/viewpage.action?pageId=27363329"
             }
         }
 
@@ -52,17 +52,27 @@ class DifyUploadRequest(BaseModel):
     """Dify 知识库导入请求模型."""
 
     dataset_prefix: str = Field(
-        default="标准检索知识库",
+        default="智慧数据标准知识库",
         description="数据集名称前缀",
     )
 
     max_docs: int = Field(default=12000, description="每个数据集的最大文档数量")
 
+    indexing_technique: str = Field(
+        default="high_quality",
+        description="索引技术-高质量(默认), 经济, 父子检索, 问答",
+        choices=["high_quality", "economy", "parent", "qa"],
+    )
+
     class Config:
         """配置."""
 
         json_schema_extra = {
-            "example": {"dataset_prefix": "大品控父子检索知识库", "max_docs": 12000}
+            "example": {
+                "dataset_prefix": "智慧数据标准知识库",
+                "max_docs": 12000,
+                "indexing_technique": "high_quality",
+            }
         }
 
 
@@ -70,8 +80,8 @@ class JiraITOPSRequest(BaseModel):
     """Jira ITOPS工单创建请求模型."""
 
     summary: str = Field(default="ITOPS工单标题", description="工单标题")
-    assignee: str = Field(default="zengdi", description="经办人ID，默认-1表示未分配")
-    creater: str = Field(default="zengdi", description="创建人用户名")
+    assignee: str = Field(default="zengdi", description="经办人")
+    creater: str = Field(default="zengdi", description="创建人")
     password: str = Field(default="1", description="创建人密码")
     issuetype: str = Field(default="11203", description="问题类型ID")
     description: str = Field(default="工单描述", description="工单描述")

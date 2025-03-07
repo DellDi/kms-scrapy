@@ -1,10 +1,8 @@
 """Dify 知识库导入 API 服务"""
 
 import os
-import shutil
 import asyncio
 import logging
-import json
 import requests
 import re
 from datetime import datetime
@@ -40,7 +38,7 @@ def get_task_by_id(task_id: UUID, db: Session) -> Optional[Task]:
 
 
 def create_dify_task(
-    task_id: UUID, crawler_task_id: UUID, dataset_prefix: str, max_docs: int, db: Session
+    task_id: UUID, crawler_task_id: UUID, dataset_prefix: str, max_docs: int, db: Session, **kwargs
 ) -> DifyTask:
     """创建新的Dify任务."""
     # 获取爬虫任务的输出目录路径
@@ -60,7 +58,7 @@ def create_dify_task(
         dataset_prefix=dataset_prefix,
         max_docs=max_docs,
         start_time=datetime.now().timestamp(),
-        extra_data={"crawler_task_id": str(crawler_task_id)},  # 记录关联的爬虫任务ID
+        extra_data={"crawler_task_id": str(crawler_task_id), **kwargs},  # 记录关联的爬虫任务ID
     )
     db.add(task)
     db.commit()
@@ -130,6 +128,7 @@ async def start_dify_upload(
         dataset_prefix=request.dataset_prefix,
         max_docs=request.max_docs,
         db=db,
+        **request.model_dump(exclude={"dataset_prefix", "max_docs"}),
     )
 
     # 异步启动Dify导入任务
@@ -167,6 +166,8 @@ async def run_dify_uploader(task_id: UUID, **kwargs) -> None:
                 str(task.max_docs),
                 "--input-dir",
                 task.input_dir,
+                "--indexing-technique",
+                kwargs.get("indexing_technique", "high_quality"),
             ]
 
             # 异步执行命令

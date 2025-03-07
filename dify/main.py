@@ -11,7 +11,7 @@ from datetime import datetime
 from pathlib import Path
 
 from dify import DifyClient, DatasetManager
-from config import API_KEY, BASE_URL, DEFAULT_INPUT_DIR, SUPPORTED_FILE_EXTENSIONS, DATASET_NAME_PREFIX, MAX_DOCS_PER_DATASET
+from .config import API_KEY, BASE_URL, DEFAULT_INPUT_DIR, SUPPORTED_FILE_EXTENSIONS, DATASET_NAME_PREFIX, MAX_DOCS_PER_DATASET
 from dotenv import load_dotenv
 
 # 载入环境变量
@@ -78,6 +78,14 @@ def parse_args():
         type=str,
         default=DEFAULT_INPUT_DIR,
         help=f"输入目录路径 (默认: {DEFAULT_INPUT_DIR})"
+    )
+
+    parser.add_argument(
+        "--indexing-technique",
+        type=str,
+        default="high_quality",
+        choices=["high_quality", "economy", "parent", "qa"],
+        help=f"索引技术 (默认: high_quality)",
     )
 
     return parser.parse_args()

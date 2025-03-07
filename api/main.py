@@ -19,7 +19,7 @@ from api.dify_service import router as dify_router
 from sqlmodel import Session, select
 
 from api.database.models import Task, DifyTask
-from api.middleware import APILoggingMiddleware
+from api.middleware import APILoggingMiddleware, BearerTokenMiddleware
 from api.database.db import get_db, init_db, engine
 
 # 载入环境变量
@@ -153,7 +153,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.add_middleware(APILoggingMiddleware)
-
+app.add_middleware(BearerTokenMiddleware)
 
 @app.get("/", tags=["根路径"], include_in_schema=False)
 def get_root():
