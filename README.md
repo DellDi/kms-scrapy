@@ -1,6 +1,6 @@
-# KMS 文档爬虫系统
+# 文档爬虫与知识库管理系统
 
-一个基于 Scrapy 的 Confluence KMS 系统爬虫项目，具有强大的文档处理和内容优化功能。同时支持Jira系统的问题数据抓取，以及Dify知识库的数据集成。
+一个基于 FastAPI 和 Scrapy 的综合文档管理系统，提供统一的API服务和多源数据采集能力。支持 Confluence 文档爬取、Jira 数据抓取、以及 Dify 知识库管理，并提供完整的RESTful API接口。
 
 ## 功能特性
 
@@ -31,6 +31,14 @@
   - Confluence文档输出（JSON 格式）
   - Jira问题导出（Markdown 格式）
   - Dify知识库同步
+
+- 🚀 统一API服务
+  - RESTful API接口设计
+  - Swagger/ReDoc接口文档
+  - 多源数据任务管理
+  - 自动任务清理机制
+  - 完整的日志追踪系统
+  - 跨域请求支持(CORS)
 
 ## 环境要求
 
@@ -137,7 +145,20 @@ attachment_filters: Dict[str, Any] = {
 3. 运行爬虫：
 
 ```bash
-uv run crawler/main.py
+uv run crawler/main.py [参数选项]
+```
+
+支持的命令行参数：
+- `--output_dir`: 输出目录路径（默认：output）
+- `--start_url`: 起始知识库URL
+- `--callback_url`: 爬取完成后的回调URL
+
+例如：
+```bash
+uv run crawler/main.py \
+  --output_dir="./output" \
+  --start_url="http://kms.example.com/pages/123" \
+  --callback_url="http://localhost:8000/api/callback"
 ```
 
 爬取的数据将保存在 `output` 目录下的 JSON 文件中。
@@ -147,7 +168,28 @@ uv run crawler/main.py
 1. 运行爬虫：
 
 ```bash
-uv run jira/main.py
+uv run jira/main.py [参数选项]
+```
+
+支持的命令行参数：
+- `--page_size`: 每页问题数量
+- `--start_at`: 起始页码
+- `--jql`: JQL查询条件
+- `--description_limit`: 问题描述截断长度
+- `--comments_limit`: 问题评论个数
+- `--output_dir`: 输出目录
+- `--callback_url`: 爬取完成后的回调URL
+
+例如：
+```bash
+uv run jira/main.py \
+  --page_size=50 \
+  --start_at=0 \
+  --jql="project = PMS" \
+  --description_limit=1000 \
+  --comments_limit=10 \
+  --output_dir="./output-jira" \
+  --callback_url="http://localhost:8000/api/callback"
 ```
 
 爬取的数据将保存在 `output-jira` 目录下，按页码组织的Markdown文件：
@@ -176,13 +218,65 @@ DIFY_API_ENDPOINT=https://your-dify-instance/v1
 2. 上传文档到知识库：
 
 ```bash
-uv run dify/examples/upload_documents.py
+uv run dify/main.py [参数选项]
+```
+
+支持的命令行参数：
+- `--dataset-prefix`: 数据集名称前缀，用于创建或识别知识库（默认：KMS-）
+- `--max-docs`: 每个数据集的最大文档数量（默认: 100）
+- `--input-dir`: 输入目录路径，包含要上传的文档（默认: ./output）
+
+例如：
+```bash
+uv run dify/main.py \
+  --dataset-prefix="KMS-" \
+  --max-docs=200 \
+  --input-dir="./output"
 ```
 
 这将：
 - 自动创建知识库（如果不存在）
 - 批量上传处理后的文档
 - 支持文档更新和版本管理
+
+### API 服务
+
+统一的API服务提供了对爬虫任务和知识库管理的集中控制。
+
+1. 配置服务：
+
+在 `.env` 文件中设置API服务配置：
+
+```env
+API_ROOT_PATH=/api  # API根路径（可选）
+API_ROOT_PORT=8000  # API服务端口
+```
+
+2. 启动服务：
+
+```bash
+uv run api/main.py
+```
+
+3. 访问API文档：
+
+- Swagger UI: http://localhost:8000/api/docs
+- ReDoc: http://localhost:8000/api/redoc
+
+4. 主要端点：
+
+- `/api/jira/tasks`: Jira爬虫任务管理
+- `/api/kms/tasks`: KMS爬虫任务管理
+- `/api/dify/tasks`: Dify知识库任务管理
+- `/api/logs`: API请求日志查询
+
+5. 特性：
+
+- RESTful API设计
+- 自动的任务清理（7天）
+- 详细的请求日志记录
+- 支持跨域请求(CORS)
+- OpenAPI/Swagger文档
 
 ## 项目结构
 
@@ -209,6 +303,17 @@ uv run dify/examples/upload_documents.py
 │   │   └── knowledge_base.py # 知识库管理
 │   ├── examples/     # 使用示例
 │   └── utils/        # 工具函数
+├── api/             # API服务模块
+│   ├── database/     # 数据库模型和配置
+│   │   ├── db.py      # 数据库连接管理
+│   │   └── models.py  # SQLModel数据模型
+│   ├── middleware/   # 中间件组件
+│   │   └── logging.py # 请求日志中间件
+│   ├── models/      # 请求响应模型
+│   ├── api_service.py    # Jira接口服务
+│   ├── api_kms_service.py # KMS接口服务
+│   ├── dify_service.py   # Dify接口服务
+│   └── common.py    # 通用功能模块
 ├── output/          # Confluence输出目录
 │   ├── docs/          # Markdown 文档
 │   └── attachments/   # 附件文件
