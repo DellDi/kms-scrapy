@@ -254,7 +254,7 @@ class DifyClient:
         # 构建处理规则配置
         rule_config = {
             "indexing_technique": indexing_technique,
-            "doc_form": "hierarchical_model",
+            "doc_form": "hierarchical_model",  # hierarchical_model  qa_model
             "doc_language": "Chinese",
             # 自动规则处理
             "process_rule": EMBEDDING_PROCESS_PARENT_RULE,

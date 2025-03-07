@@ -3,7 +3,10 @@ Dify 知识库导入工具配置
 """
 
 import os
+from dotenv import load_dotenv
 
+# 载入环境变量
+load_dotenv()
 # API 配置
 API_KEY = os.getenv("DIFY_API_KEY", "your-api-key")
 BASE_URL = os.getenv("DIFY_BASE_URL", "https://api.dify.ai/v1")
@@ -47,7 +50,7 @@ EMBEDDING_PROCESS_PARENT_RULE = {
             {"id": "remove_urls_emails", "enabled": False},
         ],
         "segmentation": {"separator": "\n\n", "max_tokens": 500},
-        "parent_mode": "full-doc",  # full-doc, paragraph
+        "parent_mode": "paragraph",  # full-doc, paragraph
         "subchunk_segmentation": {"separator": "\n", "max_tokens": 200},
     },
 }

@@ -100,9 +100,9 @@ class ConfluenceSpider(scrapy.Spider):
             },
         )
 
-    def optimize_content(self, content: str, spiderUrl: str | None) -> str:
+    def optimize_content(self, content: str, spiderUrl: str | None, title: str = '') -> str:
         optimizer = OptimizerFactory.create_optimizer()
-        return optimizer.optimize(content=content, spiderUrl=spiderUrl)
+        return optimizer.optimize(content=content, spiderUrl=spiderUrl, title=title)
 
     def parse_content(self, response):
         # 解析页面内容

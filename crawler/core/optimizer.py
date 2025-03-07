@@ -46,7 +46,7 @@ class ContentOptimizer(ABC):
 
     @abstractmethod
     def optimize(
-        self, content: str, stream: bool = False, strip=False, spiderUrl=""
+        self, content: str, stream: bool = False, strip=False, spiderUrl="", title=""
     ) -> Union[str, Generator[Dict[str, Any], None, None]]:
         """优化内容的抽象方法"""
         pass
@@ -402,7 +402,7 @@ class HTMLToMarkdownOptimizer(ContentOptimizer):
         self.h.skip_internal_links = True
         self.h.pad_tables = True  # 添加表格填充
 
-    def optimize(self, content: str, strip=False, spiderUrl="") -> str:
+    def optimize(self, content: str, strip=False, spiderUrl="", title="") -> str:
         """将HTML内容转换为Markdown格式
 
         Args:
@@ -417,6 +417,9 @@ class HTMLToMarkdownOptimizer(ContentOptimizer):
             # 基础HTML清理
             content = content.replace("<br>", "<br/>")
             content = content.replace("<hr>", "<hr/>")
+
+            # 顶部加标题和原始问题链接
+            markdown = f"# {title}\n\n"
 
             # 使用内置转换器处理
             markdown = self.h.handle(content)
