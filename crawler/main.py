@@ -136,7 +136,7 @@ def main():
         start_url = args.start_url if args.start_url else config.spider.start_url
         logger.info(f"添加爬虫任务: {start_url}")
         process.crawl(
-            ConfluenceSpider(),
+            ConfluenceSpider,  # 传递 Spider 类，而不是实例
             start_url=start_url,
         )
 
