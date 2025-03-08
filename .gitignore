@@ -21,7 +21,7 @@ wheels/
 .scrapy/
 *.egg
 *.db
-api/temp/
+api/temp*
 
 # Virtual Environment
 venv/

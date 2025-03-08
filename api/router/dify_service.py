@@ -9,9 +9,10 @@ from datetime import datetime
 from typing import Optional, List
 from uuid import UUID, uuid4
 
-from fastapi import HTTPException, Depends, Query
+from fastapi import HTTPException, Depends, Query, Security
 from fastapi.responses import FileResponse
 from sqlmodel import Session, select
+from fastapi.security import HTTPBearer
 
 from fastapi import APIRouter
 
@@ -19,12 +20,23 @@ from api.models.request import DifyUploadRequest, JiraITOPSRequest
 from api.database.models import DifyTask, Task
 from api.database.db import get_db, engine
 from api.models.response import DifyTaskStatus, DifyTaskResponse, DifyTaskList, JiraITOPSResponse
-from api.api_service import TEMP_DIR
+from api.router.api_service import TEMP_DIR
 
 # 配置日志
 logger = logging.getLogger("uvicorn")
 
-router = APIRouter(prefix="/api/dify", tags=["知识库服务-Dify"])
+# 定义安全方案仅用于 API 文档生成
+security_scheme = HTTPBearer(
+    scheme_name="Bearer Token",
+    description="请输入 API Token",
+    auto_error=False
+)
+
+router = APIRouter(
+    prefix="/api/dify",
+    tags=["知识库服务-Dify"],
+    dependencies=[Security(security_scheme)]  # 为所有路由添加 Bearer Token 认证
+)
 
 
 def get_dify_task_by_id(task_id: UUID, db: Session) -> Optional[DifyTask]:

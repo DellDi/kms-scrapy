@@ -7,15 +7,16 @@ import shutil
 from datetime import datetime
 from dotenv import load_dotenv
 
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, Security
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from contextlib import asynccontextmanager
 
-from api.api_service import router as jira_router, TEMP_DIR
-from api.api_kms_service import router as kms_router
-from api.common import router as common_router
-from api.dify_service import router as dify_router
+from api.router.api_service import router as jira_router, TEMP_DIR
+from api.router.api_kms_service import router as kms_router
+from api.router.common import router as common_router
+from api.router.dify_service import router as dify_router
 from sqlmodel import Session, select
 
 from api.database.models import Task, DifyTask
@@ -112,6 +113,15 @@ async def lifespan(app: FastAPI):
 # 初始化数据库
 init_db()
 
+# 定义全局安全方案
+security_schemes = {
+    "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "请输入 API Token"
+    }
+}
 
 app = FastAPI(
     title="爬虫API服务",
@@ -119,6 +129,14 @@ app = FastAPI(
     # 爬虫API服务文档
 
     该服务提供了一组API接口，用于管理和控制爬虫任务。
+
+    ## 认证说明
+
+    接口需要使用 Bearer Token 认证。请在请求头中添加：
+
+    ```
+    Authorization: Bearer YOUR_API_TOKEN
+    ```
 
     ## 主要功能
 
@@ -141,7 +159,16 @@ app = FastAPI(
     docs_url="/api/docs",
     redoc_url="/api/redoc",
     openapi_url="/api/openapi.json",
-    root_path=API_ROOT_PATH  # 使用环境变量设置根路径
+    root_path=API_ROOT_PATH,  # 使用环境变量设置根路径
+    openapi_tags=[
+        {"name": "爬虫服务-Jira", "description": "Jira 爬虫相关接口"},
+        {"name": "爬虫任务-kms", "description": "KMS 爬虫相关接口"},
+        {"name": "知识库服务-Dify", "description": "Dify 知识库相关接口"},
+        {"name": "系统监控", "description": "系统监控相关接口"}
+    ],
+    swagger_ui_parameters={"defaultModelsExpandDepth": -1},
+    openapi_extra={"components": {"securitySchemes": security_schemes}},
+    security=[{"BearerAuth": []}]
 )
 
 # 添加中间件
@@ -153,7 +180,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.add_middleware(APILoggingMiddleware)
-app.add_middleware(BearerTokenMiddleware)
+# 使用环境变量中的 API_TOKEN 值来初始化 Bearer Token 中间件
+app.add_middleware(BearerTokenMiddleware, token_env_var="API_TOKEN")
 
 @app.get("/", tags=["根路径"], include_in_schema=False)
 def get_root():

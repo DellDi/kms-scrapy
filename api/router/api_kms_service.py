@@ -10,7 +10,8 @@ from datetime import datetime
 from typing import Optional, List
 from uuid import UUID, uuid4
 
-from fastapi import Depends, HTTPException, Query, APIRouter
+from fastapi import Depends, HTTPException, Query, APIRouter, Security
+from fastapi.security import HTTPBearer
 from fastapi.responses import FileResponse
 from sqlmodel import Session, select
 
@@ -18,13 +19,21 @@ from api.database.models import Task
 from api.database.db import get_db, engine
 from api.models.request import CrawlKMSRequest
 from api.models.response import TaskStatus, TaskResponse, TaskList, BinaryFileSchema
-from api.api_service import TEMP_DIR
+from api.router.api_service import TEMP_DIR
 
 # 配置日志
 logger = logging.getLogger(__name__)
 
+# 定义安全方案仅用于 API 文档生成
+security_scheme = HTTPBearer(
+    scheme_name="Bearer Token", description="请输入 API Token", auto_error=False
+)
 
-router = APIRouter(prefix="/api/kms", tags=["爬虫任务-kms"])
+router = APIRouter(
+    prefix="/api/kms",
+    tags=["爬虫任务-kms"],
+    dependencies=[Security(security_scheme)],  # 为所有路由添加 Bearer Token 认证
+)
 
 
 # 根据ID获取任务

@@ -9,9 +9,10 @@ from datetime import datetime
 from typing import Optional, List
 from uuid import UUID, uuid4
 
-from fastapi import HTTPException, Depends, Query
+from fastapi import HTTPException, Depends, Query, Security
 from fastapi.responses import FileResponse
 from sqlmodel import Session, select
+from fastapi.security import HTTPBearer
 
 # 新的示例和router模式
 from fastapi import APIRouter
@@ -29,10 +30,21 @@ from api.models.response import (
 # 配置日志
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/jira", tags=["爬虫服务-Jira"])
+# 定义安全方案仅用于 API 文档生成
+security_scheme = HTTPBearer(
+    scheme_name="Bearer Token",
+    description="请输入 API Token",
+    auto_error=False
+)
 
-# 临时文件目录
-TEMP_DIR = os.path.join(os.path.dirname(__file__), "temp")
+router = APIRouter(
+    prefix="/api/jira",
+    tags=["爬虫服务-Jira"],
+    dependencies=[Security(security_scheme)]  # 为所有路由添加 Bearer Token 认证
+)
+
+# 临时爬虫到的文件目录
+TEMP_DIR = os.path.join(os.path.dirname(__package__), "api/temp_scrapy")
 os.makedirs(TEMP_DIR, exist_ok=True)
 
 

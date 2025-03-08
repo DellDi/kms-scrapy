@@ -61,7 +61,7 @@ api/
 使用以下命令启动API服务：
 
 ```bash
-uv run -m api.api_service
+uv run -m api.main
 ```
 
 服务默认在 http://localhost:8000 启动。

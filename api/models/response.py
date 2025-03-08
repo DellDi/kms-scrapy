@@ -1,6 +1,5 @@
 """响应模型定义."""
 
-import imp
 from typing import Optional, Dict, Any, List, Annotated
 from uuid import UUID
 

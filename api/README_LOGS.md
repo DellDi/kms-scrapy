@@ -133,26 +133,3 @@ uv run -m api.init_db
 ```bash
 ls -lh api/api.db
 ```
-
-2. 监控错误率：
-```sql
-SELECT
-    date(created_at) as day,
-    count(*) as total,
-    sum(case when response_status >= 400 then 1 else 0 end) as errors,
-    round(sum(case when response_status >= 400 then 1 else 0 end) * 100.0 / count(*), 2) as error_rate
-FROM api_logs
-GROUP BY date(created_at)
-ORDER BY day DESC;
-```
-
-3. 分析响应时间：
-```sql
-SELECT
-    request_path,
-    avg(duration_ms) as avg_duration,
-    max(duration_ms) as max_duration,
-    count(*) as requests
-FROM api_logs
-GROUP BY request_path
-ORDER BY avg_duration DESC;
