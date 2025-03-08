@@ -32,15 +32,13 @@ logger = logging.getLogger(__name__)
 
 # 定义安全方案仅用于 API 文档生成
 security_scheme = HTTPBearer(
-    scheme_name="Bearer Token",
-    description="请输入 API Token",
-    auto_error=False
+    scheme_name="Bearer Token", description="请输入 API Token", auto_error=False
 )
 
 router = APIRouter(
     prefix="/api/jira",
     tags=["爬虫服务-Jira"],
-    dependencies=[Security(security_scheme)]  # 为所有路由添加 Bearer Token 认证
+    dependencies=[Security(security_scheme)],  # 为所有路由添加 Bearer Token 认证
 )
 
 # 临时爬虫到的文件目录
@@ -126,7 +124,7 @@ async def start_crawl(request: CrawlRequest, db: Session = Depends(get_db)) -> T
     )
 
     # 异步启动爬虫任务
-    asyncio.create_task(run_crawler(task_id, **request.model_dump()))
+    asyncio.create_task(run_crawler(task_id, **request.model_dump(exclude={"jql"})))
 
     return TaskResponse(
         task_id=task.id,
@@ -144,11 +142,6 @@ async def run_crawler(task_id: UUID, **kwargs) -> None:
             if not task:
                 logger.error(f"Task not found: {task_id}")
                 return
-            start_at = kwargs.get("start_at")
-            page_size = kwargs.get("page_size")
-            description_limit = kwargs.get("description_limit")
-            comments_limit = kwargs.get("comments_limit")
-
             # 更新任务状态为运行中
             update_task_status(task=task, status="running", message="Crawler is running", db=db)
 
@@ -159,19 +152,29 @@ async def run_crawler(task_id: UUID, **kwargs) -> None:
                 "jira/main.py",
                 "--jql",
                 task.jql,
-                "--start_at",
-                str(start_at),
-                "--page_size",
-                str(page_size),
-                "--description_limit",
-                str(description_limit),
-                "--comments_limit",
-                str(comments_limit),
                 "--output_dir",
                 task.output_dir,
-                "--callback_url",
-                f"http://localhost:8000/api/jira/callback/{task_id}",
             ]
+
+            # 添加可选参数
+            # cmd.extend([item for key, value in kwargs.items() if value is not None for item in [f"--{key}", str(value)]])
+
+            # 添加可选参数
+            for key, value in kwargs.items():
+                if value is not None:  # 只添加非None的参数
+                    cmd.append(f"--{key}")
+                    cmd.append(str(value))  # 确保值是字符串
+
+            API_ROOT_PORT = os.getenv("API_ROOT_PORT", 8000)
+            API_ROOT_PATH = os.getenv("API_ROOT_PATH", "")
+
+            # 添加回调URL
+            cmd.extend(
+                [
+                    "--callback_url",
+                    f"http://localhost:{API_ROOT_PORT}{API_ROOT_PATH}/api/jira/callback/{task_id}",
+                ]
+            )
 
             # 异步执行爬虫命令
             process = await asyncio.create_subprocess_exec(

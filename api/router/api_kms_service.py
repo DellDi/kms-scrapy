@@ -166,6 +166,8 @@ async def run_kms_crawler(task_id: UUID, start_url: str, **kwargs) -> None:
             # 准备爬虫命令
             output_dir = task.output_dir
 
+            API_ROOT_PORT = os.getenv("API_ROOT_PORT", 8000)
+            API_ROOT_PATH = os.getenv("API_ROOT_PATH", "")
             # 构建爬虫命令
             crawler_cmd = [
                 "uv",
@@ -176,13 +178,14 @@ async def run_kms_crawler(task_id: UUID, start_url: str, **kwargs) -> None:
                 "--output_dir",
                 output_dir,
                 "--callback_url",
-                f"http://localhost:8000/api/kms/callback/{task_id}",
-                *[f"--{key}" for key, value in kwargs.items() if value],
+                f"http://localhost:{API_ROOT_PORT}{API_ROOT_PATH}/api/kms/callback/{task_id}",
             ]
 
-            # 如果有回调URL，添加到命令中
-            if kwargs.get("callback_url"):
-                crawler_cmd.extend(["--callback_url", f"{kwargs.get('callback_url')}/{task_id}"])
+            # 添加可选参数
+            for key, value in kwargs.items():
+                if value is not None:  # 只添加非None的参数
+                    crawler_cmd.append(f"--{key}")
+                    crawler_cmd.append(str(value))  # 确保值是字符串
 
             logger.info(f"执行爬虫命令: {' '.join(crawler_cmd)}")
 
