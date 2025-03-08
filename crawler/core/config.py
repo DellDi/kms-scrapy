@@ -5,6 +5,7 @@ import os
 
 load_dotenv()
 
+
 class AuthConfig(BaseModel):
     """认证配置"""
 
@@ -16,8 +17,10 @@ class AuthConfig(BaseModel):
 
 class SpiderConfig(BaseModel):
     """爬虫配置"""
+
     output_dir: str = "output-kms"
     start_urls: list[str] = ["http://kms.new-see.com:8090/pages/viewpage.action?pageId=92012631"]
+    optimizer_type: str = "html2md"  # 优化器类型 html2md xunfei baichuan compatible
     download_delay: int = 4
     concurrent_requests: int = 2
     retry_times: int = 5
@@ -34,7 +37,12 @@ class SpiderConfig(BaseModel):
     }
     # 附件过滤配置
     attachment_filters: Dict[str, Any] = {
-        "excluded_mime_types": ["image/jpeg", "image/png", "image/gif", "image/svg+xml"],  # 排除的MIME类型
+        "excluded_mime_types": [
+            "image/jpeg",
+            "image/png",
+            "image/gif",
+            "image/svg+xml",
+        ],  # 排除的MIME类型
         "excluded_extensions": [".jpg", ".jpeg", ".png", ".gif", ".svg"],  # 排除的文件扩展名
         "max_size_mb": 50,  # 最大附件大小(MB)，超过此大小的附件将被跳过
         "enabled": True,  # 是否启用附件过滤
@@ -55,6 +63,14 @@ class XunfeiConfig(BaseModel):
     api_url: str = "https://spark-api-open.xf-yun.com/v1/chat/completions"
 
 
+class OpenAIConfig(BaseModel):
+    """兼容openai 配置"""
+
+    api_key: str
+    api_url: str = "https://api.openai.com/v1/chat/completions"
+    model: str = "gpt-3.5-turbo"
+
+
 class Config:
     """全局配置类"""
 
@@ -69,6 +85,11 @@ class Config:
         self.spider = SpiderConfig()
         self.baichuan = BaichuanConfig(api_key=os.getenv("BAI_CH_API_KEK"))
         self.xunfei = XunfeiConfig(api_key=os.getenv("XUNFEI_API_KEY"))
+        self.openai = OpenAIConfig(
+            api_key=os.getenv("OPENAI_API_KEY"),
+            model=os.getenv("OPENAI_API_MODEL"),
+            api_url=os.getenv("OPENAI_API_URL"),
+        )
 
 
 # 全局配置实例

@@ -38,7 +38,12 @@ def get_kms_task_by_id(task_id: UUID, db: Session):
 
 # 创建新任务
 def create_kms_task(
-    task_id: UUID, start_url: str, output_dir: str, callback_url: Optional[str], db: Session
+    task_id: UUID,
+    start_url: str,
+    output_dir: str,
+    callback_url: Optional[str],
+    db: Session,
+    **kwargs,
 ):
     """创建新的KMS爬虫任务."""
     task = Task(
@@ -49,6 +54,7 @@ def create_kms_task(
         output_dir=output_dir,
         start_time=datetime.now().timestamp(),  # 转换为时间戳
         callback_url=callback_url,
+        extra_data=kwargs,
     )
     db.add(task)
     db.commit()
@@ -93,6 +99,13 @@ def update_kms_task_status(
 )
 async def start_kms_crawl(request: CrawlKMSRequest, db: Session = Depends(get_db)) -> Task:
     """启动KMS爬虫任务."""
+    # 校验api_key参数
+    if request.api_key:
+        if not request.api_url or not request.model:
+            raise HTTPException(
+                status_code=400, detail="当提供api_key时，api_url和model参数必须提供"
+            )
+
     # 生成任务ID
     task_id = uuid4()
 
@@ -107,14 +120,21 @@ async def start_kms_crawl(request: CrawlKMSRequest, db: Session = Depends(get_db
         output_dir=output_dir,
         db=db,
         callback_url=f"http://localhost:8000/api/kms/callback/{task_id}",
+        **request.model_dump(exclude={"start_url"}),
     )
 
     # 异步启动爬虫
-    asyncio.create_task(run_kms_crawler(task_id=task_id, start_url=request.start_url))
+    asyncio.create_task(
+        run_kms_crawler(
+            task_id=task_id,
+            start_url=request.start_url,
+            **request.model_dump(exclude={"start_url"}),
+        )
+    )
 
     return TaskResponse(
         task_id=task_id,
-        message="KMS爬虫任务建立成功",
+        message="Confluence爬虫任务建立成功",
     )
 
 
@@ -148,6 +168,7 @@ async def run_kms_crawler(task_id: UUID, start_url: str, **kwargs) -> None:
                 output_dir,
                 "--callback_url",
                 f"http://localhost:8000/api/kms/callback/{task_id}",
+                *[f"--{key}" for key, value in kwargs.items() if value],
             ]
 
             # 如果有回调URL，添加到命令中

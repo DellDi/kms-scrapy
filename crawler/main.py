@@ -23,8 +23,7 @@ def setup_logging():
 
     # 生成日志文件路径
     log_file = os.path.join(
-        log_dir,
-        f'confluence_spider_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log'
+        log_dir, f'confluence_spider_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log'
     )
 
     # 配置根日志记录器
@@ -32,11 +31,10 @@ def setup_logging():
     root_logger.setLevel(logging.DEBUG)  # 设置为DEBUG以捕获所有级别的日志
 
     # 创建并配置文件处理器
-    file_handler = logging.FileHandler(log_file, encoding='utf-8')
+    file_handler = logging.FileHandler(log_file, encoding="utf-8")
     file_handler.setLevel(logging.DEBUG)
     file_format = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
     )
     file_handler.setFormatter(file_format)
     root_logger.addHandler(file_handler)
@@ -45,19 +43,17 @@ def setup_logging():
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(logging.INFO)  # 控制台只显示INFO及以上级别
     console_format = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        datefmt='%H:%M:%S'
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s", datefmt="%H:%M:%S"
     )
     console_handler.setFormatter(console_format)
     root_logger.addHandler(console_handler)
 
     return logging.getLogger(__name__)
 
+
 def parse_args():
     """解析命令行参数"""
     parser = argparse.ArgumentParser(description="Confluence爬虫")
-
-    parser.add_argument("--output_dir", type=str, default=config.spider.output_dir, help="输出目录")
 
     parser.add_argument(
         "--start_url",
@@ -66,9 +62,25 @@ def parse_args():
         help="起始Confluence知识库的URL",
     )
 
+    parser.add_argument(
+        "--optimizer_type",
+        type=str,
+        default="html2md",
+        help="优化器类型 html2md xunfei baichuan compatible",
+    )
+
+    parser.add_argument("--api_key", type=str, help="兼容openai API密钥")
+
+    parser.add_argument("--api_url", type=str, help="兼容兼容openai APIURL")
+
+    parser.add_argument("--model", type=str, help="兼容openai的模型")
+
+    # 接口模式下无需指定输出目录，由接口自动生成
+    parser.add_argument("--output_dir", type=str, default=config.spider.output_dir, help="输出目录")
     parser.add_argument("--callback_url", type=str, help="回调URL")
 
     return parser.parse_args()
+
 
 def main():
     """主函数"""
@@ -82,6 +94,11 @@ def main():
 
         # 更新配置
         config.spider.output_dir = args.output_dir
+        config.spider.optimizer_type = args.optimizer_type
+        config.openai.api_key = args.api_key if args.api_key else config.openai.api_key
+        config.openai.api_url = args.api_url if args.api_url else config.openai.api_url
+        config.openai.model = args.model if args.model else config.openai.model
+
         logger.info(f"输出目录: {config.spider.output_dir}")
         # 创建输出目录
         output_dir = config.spider.output_dir
@@ -98,15 +115,17 @@ def main():
 
         # 配置Scrapy设置
         settings = get_project_settings()
-        settings.update({
-            "FEEDS": {
-                f"{output_dir}/%(name)s.json": {
-                    "format": "json",
-                    "encoding": "utf8",
-                    "indent": 2
+        settings.update(
+            {
+                "FEEDS": {
+                    f"{output_dir}/%(name)s.json": {
+                        "format": "json",
+                        "encoding": "utf8",
+                        "indent": 2,
+                    }
                 }
             }
-        })
+        )
         logger.debug(f"Scrapy设置: {settings}")
 
         # 创建爬虫进程
@@ -114,10 +133,10 @@ def main():
         logger.info("已创建爬虫进程")
 
         # 添加爬虫 智慧大品控-开始
-        start_url = args.start_url
+        start_url = args.start_url if args.start_url else config.spider.start_url
         logger.info(f"添加爬虫任务: {start_url}")
         process.crawl(
-            ConfluenceSpider,
+            ConfluenceSpider(),
             start_url=start_url,
         )
 
@@ -152,6 +171,7 @@ def main():
     except Exception as e:
         logger.error(f"程序执行失败: {str(e)}")
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

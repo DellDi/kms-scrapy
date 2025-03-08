@@ -46,7 +46,7 @@ class ContentOptimizer(ABC):
 
     @abstractmethod
     def optimize(
-        self, content: str, stream: bool = False, strip=False, spiderUrl="", title=""
+        self, content: str, stream: bool = False, spiderUrl="", title=""
     ) -> Union[str, Generator[Dict[str, Any], None, None]]:
         """优化内容的抽象方法"""
         pass
@@ -65,7 +65,7 @@ class OpenAICompatibleAdapter:
             model: 模型名称，默认为"default"
         """
         self.api_key = api_key
-        self.api_url = api_url.rstrip("/")
+        self.api_url = api_url
         self.model = model
         self.headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
 
@@ -233,7 +233,11 @@ class BaichuanOptimizer(ContentOptimizer):
         self.api_key = api_key or config.baichuan.api_key
         self.api_url = api_url or config.baichuan.api_url
 
-    def optimize(self, content: str, stream: bool = False, strip=False) -> str:
+    def optimize(
+        self,
+        content: str,
+        stream: bool = False,
+    ) -> str:
         """使用百川API优化内容"""
         if not self.api_key:
             return content
@@ -269,7 +273,9 @@ class XunfeiOptimizer(ContentOptimizer):
         self.adapter = StreamingResponseAdapter()
 
     def optimize(
-        self, content: str, stream: bool = False, strip=False
+        self,
+        content: str,
+        stream: bool = False,
     ) -> Union[str, Generator[Dict[str, Any], None, None]]:
         """
         使用讯飞API优化内容
@@ -284,10 +290,6 @@ class XunfeiOptimizer(ContentOptimizer):
         """
         if not self.api_key:
             return content
-
-        if strip:
-            content_dedent = textwrap.dedent(content)
-            return content_dedent
 
         headers = {"Content-Type": "application/json", "Authorization": f"Bearer {self.api_key}"}
 
@@ -319,7 +321,12 @@ class XunfeiOptimizer(ContentOptimizer):
 class OpenAICompatibleOptimizer(ContentOptimizer):
     """通用的OpenAI兼容优化器实现"""
 
-    def __init__(self, api_key: str, api_url: str, model: str = "default"):
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        api_url: Optional[str] = None,
+        model: Optional[str] = None,
+    ):
         """
         初始化通用优化器
 
@@ -328,10 +335,16 @@ class OpenAICompatibleOptimizer(ContentOptimizer):
             api_url: API端点URL
             model: 模型名称
         """
-        self.adapter = OpenAICompatibleAdapter(api_key, api_url, model)
+        self.api_key = api_key or config.openai.api_key
+        self.api_url = api_url or config.openai.api_url
+        self.model = model or config.openai.model
+
+        self.adapter = OpenAICompatibleAdapter(
+            api_key=self.api_key, api_url=self.api_url, model=self.model
+        )
 
     def optimize(
-        self, content: str, stream: bool = True, strip=False
+        self, content: str, stream: bool = True
     ) -> Union[str, Generator[Dict[str, Any], None, None]]:
         """
         使用通用适配器优化内容
@@ -402,14 +415,12 @@ class HTMLToMarkdownOptimizer(ContentOptimizer):
         self.h.skip_internal_links = True
         self.h.pad_tables = True  # 添加表格填充
 
-    def optimize(self, content: str, strip=False, spiderUrl="", title="") -> str:
+    def optimize(self, content: str, spiderUrl="", title="") -> str:
         """将HTML内容转换为Markdown格式
 
         Args:
             content: HTML内容
             stream: 不使用
-            strip: 是否去除前导空白
-
         Returns:
             str: Markdown格式的文本
         """
@@ -434,15 +445,14 @@ class HTMLToMarkdownOptimizer(ContentOptimizer):
             markdown += f"> 操作人：{self.operator} \n"
             markdown += f"> 原始页面地址：[{spiderUrl}]({spiderUrl}) \n"
 
-            # 如果需要去除前导空白
-            if strip:
-                markdown = textwrap.dedent(markdown)
+            markdown = textwrap.dedent(markdown)
 
             return markdown.strip()  # 移除首尾多余空白
 
         except Exception as e:
             self.logger.error(f"HTML转Markdown失败: {str(e)}")
             return content
+
 
 class OptimizerFactory:
     """优化器工厂类"""
@@ -453,7 +463,6 @@ class OptimizerFactory:
         api_key: Optional[str] = None,
         api_url: Optional[str] = None,
         model: Optional[str] = None,
-        **kwargs,
     ) -> ContentOptimizer:
         """
         创建优化器实例

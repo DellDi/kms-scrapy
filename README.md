@@ -73,7 +73,7 @@
 
 ```bash
 git clone [项目地址]
-cd kms-scrapy
+cd kms
 ```
 
 2. 使用 uv 安装依赖（推荐）：

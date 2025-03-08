@@ -36,14 +36,30 @@ class CrawlRequest(BaseModel):
 class CrawlKMSRequest(BaseModel):
     """爬虫KMS请求模型."""
 
-    start_url: str = Field(..., description="起始URL")
+    start_url: str = Field(
+        ..., description="爬取confluence的URL,目前支持6.14.0版本，其他版本未验证"
+    )
+
+    optimizer_type: str = Field(
+        default="html2md", description="优化器类型", choices=["html2md", "compatible"]
+    )
+
+    api_key: str = Field(default="", description="兼容openai API密钥")
+
+    api_url: str = Field(default="", description="兼容openai APIURL")
+
+    model: str = Field(default="", description="兼容openai模型")
 
     class Config:
         """配置."""
 
         json_schema_extra = {
             "example": {
-                "start_url": "http://kms.new-see.com:8090/pages/viewpage.action?pageId=27363329"
+                "start_url": "http://kms.new-see.com:8090/pages/viewpage.action?pageId=27363329",
+                "optimizer_type": "html2md",
+                "api_key": "",
+                "api_url": "",
+                "model": "",
             }
         }
 

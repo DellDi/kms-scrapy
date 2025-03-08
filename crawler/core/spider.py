@@ -1,5 +1,4 @@
 import scrapy
-from scrapy.http import Request, FormRequest
 from bs4 import BeautifulSoup
 from datetime import datetime
 
@@ -26,9 +25,10 @@ class ConfluenceSpider(scrapy.Spider):
         super().__init__(*args, **kwargs)
         self.start_urls = [kwargs.get("start_url", "http://kms.new-see.com:8090")]
         self.auth_manager = AuthManager({"original_url": self.start_urls[0]})
+        # 解析爬虫中的内容附件-文本输出适配器
         self.content_parser = ContentParser(
             enable_text_extraction=False,
-            content_optimizer=OptimizerFactory.create_optimizer(),
+            content_optimizer=OptimizerFactory.create_optimizer(optimizer_type="html2md"),
             auth_manager=self.auth_manager,
         )
         # 设置回调函数
@@ -100,9 +100,13 @@ class ConfluenceSpider(scrapy.Spider):
             },
         )
 
-    def optimize_content(self, content: str, spiderUrl: str | None, title: str = '') -> str:
-        optimizer = OptimizerFactory.create_optimizer()
-        return optimizer.optimize(content=content, spiderUrl=spiderUrl, title=title)
+    def optimize_content(self, content: str, spiderUrl: str | None, title: str = "") -> str:
+        optimizer = OptimizerFactory.create_optimizer(optimizer_type=config.spider.optimizer_types)
+        return optimizer.optimize(
+            content=content,
+            spiderUrl=spiderUrl,
+            title=title,
+        )
 
     def parse_content(self, response):
         # 解析页面内容

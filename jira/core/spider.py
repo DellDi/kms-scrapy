@@ -452,9 +452,7 @@ class JiraSpider:
                 issue_data["comments_str"] = "暂无评论内容"
             # 优化内容
             if issue_data["description"]:
-                issue_data["optimized_content"] = self.optimizer.optimize(
-                    issue_data["description"], strip=True
-                )
+                issue_data["optimized_content"] = self.optimizer.optimize(issue_data["description"])
 
             # 记录日志
             for key, value in issue_data.items():

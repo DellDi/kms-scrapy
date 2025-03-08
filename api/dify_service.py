@@ -7,7 +7,7 @@ import requests
 import re
 from datetime import datetime
 from typing import Optional, List
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import HTTPException, Depends, Query
 from fastapi.responses import FileResponse
@@ -115,9 +115,6 @@ async def start_dify_upload(
     task_dir = os.path.join(TEMP_DIR, str(crawler_task_id))
     if not os.path.exists(task_dir) or not os.path.isdir(task_dir):
         raise HTTPException(status_code=404, detail=f"爬虫任务目录 {task_dir} 不存在")
-
-    # 生成新的Dify任务ID
-    from uuid import uuid4
 
     dify_task_id = uuid4()
 
