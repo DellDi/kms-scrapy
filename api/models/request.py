@@ -55,7 +55,7 @@ class CrawlKMSRequest(BaseModel):
 
         json_schema_extra = {
             "example": {
-                "start_url": "http://kms.new-see.com:8090/pages/viewpage.action?pageId=92012631",
+                "start_url": "http://kms.new-see.com:8090/pages/viewpage.action?pageId=27363329",
                 "optimizer_type": "html2md",
                 "api_key": "",
                 "api_url": "",

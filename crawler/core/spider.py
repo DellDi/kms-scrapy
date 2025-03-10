@@ -101,7 +101,7 @@ class ConfluenceSpider(scrapy.Spider):
         )
 
     def optimize_content(self, content: str, spiderUrl: str | None, title: str = "") -> str:
-        optimizer = OptimizerFactory.create_optimizer(optimizer_type=config.spider.optimizer_types)
+        optimizer = OptimizerFactory.create_optimizer(optimizer_type=config.spider.optimizer_type)
         return optimizer.optimize(
             content=content,
             spiderUrl=spiderUrl,
@@ -171,7 +171,7 @@ class ConfluenceSpider(scrapy.Spider):
         # 使用自定义适配器优化内容,添加当前爬虫的完整路径
         spiderUrl = response.url
         optimized_content = self.optimize_content(
-            content=main_element.prettify(), spiderUrl=spiderUrl
+            content=main_element.prettify(), spiderUrl=spiderUrl, title=title
         )
 
         # 创建KMSItem对象，包含深度信息

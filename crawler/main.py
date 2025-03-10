@@ -58,7 +58,7 @@ def parse_args():
     parser.add_argument(
         "--start_url",
         type=str,
-        default="http://kms.new-see.com:8090/pages/viewpage.action?pageId=92012631",
+        default="http://kms.new-see.com:8090/pages/viewpage.action?pageId=27363329",
         help="起始Confluence知识库的URL",
     )
 

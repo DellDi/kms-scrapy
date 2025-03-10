@@ -275,6 +275,8 @@ class XunfeiOptimizer(ContentOptimizer):
     def optimize(
         self,
         content: str,
+        spiderUrl: str = "",
+        title: str = "",
         stream: bool = False,
     ) -> Union[str, Generator[Dict[str, Any], None, None]]:
         """
@@ -311,7 +313,8 @@ class XunfeiOptimizer(ContentOptimizer):
                 return self.adapter.adapt_streaming_response(response)
             else:
                 result = response.json()
-                return result["choices"][0]["message"]["content"]
+                # 添加当前爬虫的url
+                return f"{result["choices"][0]["message"]["content"]}\n\n> 原始页面地址：[{spiderUrl}]({spiderUrl})\n\n"
 
         except Exception as e:
             # 如果API调用失败，返回原始内容
