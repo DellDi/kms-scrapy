@@ -11,6 +11,7 @@ from scrapy.crawler import CrawlerProcess
 from scrapy.utils.project import get_project_settings
 from crawler.core.spider import ConfluenceSpider
 from crawler.core.config import config
+from crawler.utils import safe_makedirs  # 导入安全的目录创建函数
 import requests
 
 
@@ -19,7 +20,7 @@ def setup_logging():
     # 创建logs目录（如果不存在）
     log_dir = "logs-kms"
     if not os.path.exists(log_dir):
-        os.makedirs(log_dir)
+        safe_makedirs(log_dir)  # 使用安全的目录创建函数
 
     # 生成日志文件路径
     log_file = os.path.join(
@@ -110,7 +111,7 @@ def main():
             os.remove(json_file)
 
         # 创建输出目录
-        os.makedirs(output_dir, exist_ok=True)
+        safe_makedirs(output_dir, exist_ok=True)  # 使用安全的目录创建函数
         logger.info("已创建输出目录")
 
         # 配置Scrapy设置

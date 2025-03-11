@@ -4,6 +4,7 @@ import logging
 from typing import Optional, List, Dict, Any
 from .content import KMSItem
 from crawler.core.config import config
+from crawler.utils import safe_makedirs, safe_open
 
 
 class DocumentExporter:
@@ -38,15 +39,15 @@ class DocumentExporter:
                 # 如果没有提供输出路径，使用安全的标题
                 doc_markdown_dir = os.path.join(self.markdown_dir, safe_title)
                 self.logger.info(f"使用安全标题创建目录: {doc_markdown_dir}")
-            os.makedirs(doc_markdown_dir, exist_ok=True)
+            safe_makedirs(doc_markdown_dir, exist_ok=True)
         else:
             doc_markdown_dir = os.path.join(self.markdown_dir, safe_title)
-            os.makedirs(doc_markdown_dir, exist_ok=True)
+            safe_makedirs(doc_markdown_dir, exist_ok=True)
 
         # 只在有附件时创建附件目录
         doc_attachments_dir = os.path.join(doc_markdown_dir, "attachments")
         if attachments:
-            os.makedirs(doc_attachments_dir, exist_ok=True)
+            safe_makedirs(doc_attachments_dir, exist_ok=True)
 
         return doc_markdown_dir, doc_attachments_dir
 
@@ -62,7 +63,7 @@ class DocumentExporter:
         for attachment in attachments:
             # 保存原始附件
             attachment_path = os.path.join(attachments_dir, attachment["filename"])
-            with open(attachment_path, "wb") as f:
+            with safe_open(attachment_path, "wb") as f:
                 f.write(attachment["content"])
             # 如果有提取的文本内容，保存为文本格式的文件
             if attachment.get("extracted_text"):
@@ -78,7 +79,7 @@ class DocumentExporter:
                     base_name = f"{base_name}.txt"
 
                 text_path = os.path.join(attachments_dir, base_name)
-                with open(text_path, "w", encoding="utf-8") as f:
+                with safe_open(text_path, "w", encoding="utf-8") as f:
                     f.write(attachment["extracted_text"])
                 saved_attachments.append(
                     {
@@ -132,7 +133,7 @@ class DocumentExporter:
         markdown_content = self._build_markdown_content(item, attachments_info, safe_title)
         markdown_path = os.path.join(markdown_dir, f"{safe_title}.md")
 
-        with open(markdown_path, "w", encoding="utf-8") as f:
+        with safe_open(markdown_path, "w", encoding="utf-8") as f:
             f.write(markdown_content)
 
         return markdown_path, attachments_dir

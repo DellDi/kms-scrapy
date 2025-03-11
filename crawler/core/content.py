@@ -10,10 +10,20 @@ from docx import Document
 from pptx import Presentation
 import pytesseract
 from pdf2image import convert_from_path
-import magic
+
+# 导入工具模块中的函数
+from crawler.utils import (
+    setup_magic_module, 
+    detect_file_type, 
+    safe_makedirs, 
+    safe_open, 
+    ensure_long_path_support
+)
+
+# 设置magic模块
+magic = setup_magic_module()
 
 from pydantic import BaseModel, Field
-
 
 class KMSItem(BaseModel):
     """KMS文档项目"""
@@ -65,7 +75,6 @@ class ContentParser:
         soup = BeautifulSoup(html_content, "html.parser")
         titleDom = soup.select_one("#title-text")
         contentDom = soup.select_one("#main-content")
-        # linkUrl = soup.select_one("#title-text a")["href"]
         return titleDom, contentDom
 
     @staticmethod
@@ -131,9 +140,6 @@ class ContentParser:
 
         temp_path = None
         try:
-            # 获取文件类型
-            file_type = magic.from_buffer(response.body, mime=True)
-
             # 处理文件名
             file_name = os.path.basename(response.url).split("?")[0]
             file_name = urllib.parse.unquote(file_name)
@@ -144,6 +150,19 @@ class ContentParser:
                 ext = mimetypes.guess_extension(content_type)
                 if ext:
                     file_name = f"{file_name}{ext}"
+
+            # 创建临时文件
+            temp_path = f"temp_{file_name}"
+            # 使用安全的文件操作函数
+            with safe_open(temp_path, "wb") as f:
+                f.write(response.body)
+
+            # 使用工具函数检测文件类型
+            file_type = detect_file_type(
+                file_content=response.body,
+                file_name=file_name,
+                headers=response.headers
+            )
 
             # 检查是否需要过滤此附件（基于实际MIME类型和文件大小）
             attachment_filters = response.meta.get("attachment_filters")
@@ -163,22 +182,17 @@ class ContentParser:
                     )
                     return None
 
-            # 创建临时文件
-            temp_path = f"temp_{file_name}"
-            with open(temp_path, "wb") as f:
-                f.write(response.body)
-
             # 处理文本提取
             text = None
             if self.enable_text_extraction:
                 try:
-                    if "image" in file_type:
+                    if file_type and "image" in file_type:
                         text = self.process_image(temp_path)
-                    elif "pdf" in file_type:
+                    elif file_type and "pdf" in file_type:
                         text = self.process_pdf(temp_path)
-                    elif "word" in file_type:
+                    elif file_type and ("word" in file_type or file_name.endswith('.docx')):
                         text = self.process_word(temp_path)
-                    elif "powerpoint" in file_type:
+                    elif file_type and ("powerpoint" in file_type or file_name.endswith('.pptx')):
                         text = self.process_ppt(temp_path)
 
                     if text and self.content_optimizer:
