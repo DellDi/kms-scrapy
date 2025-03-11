@@ -1,15 +1,15 @@
 import asyncio
 import uvicorn
 import logging
+from logging.handlers import RotatingFileHandler
 import os
 import sys
 import shutil
 from datetime import datetime
 from dotenv import load_dotenv
 
-from fastapi import FastAPI, Depends, Security
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from contextlib import asynccontextmanager
 
@@ -31,21 +31,71 @@ API_ROOT_PATH = os.getenv("API_ROOT_PATH", "")
 API_ROOT_PORT = os.getenv("API_ROOT_PORT", "8000")
 API_ROOT_PORT = int(API_ROOT_PORT)
 
-# 创建logs目录（如果不存在）
+# 配置日志
 log_dir = "logs-api"
 if not os.path.exists(log_dir):
     os.makedirs(log_dir)
 
+# 创建轮换文件处理器
+file_handler = RotatingFileHandler(
+    os.path.join(log_dir, "api.log"),
+    maxBytes=10 * 1024 * 1024,  # 10MB
+    backupCount=5,
+    encoding="utf-8",
+)
+file_handler.setFormatter(
+    logging.Formatter(
+        "%(asctime)s - %(levelname)s - %(name)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+    )
+)
+
+# 配置根日志记录器
 logging.basicConfig(
     level=logging.DEBUG,
     handlers=[
-        # logging.StreamHandler(sys.stdout),  # 输出到控制台
-        logging.FileHandler(os.path.join(log_dir, "api.log"), encoding="utf-8"),  # 输出到文件
+        file_handler,  # 输出到轮换文件
     ],
 )
 
 # 使用uvicorn的日志记录器
 logger = logging.getLogger("uvicorn")
+
+# 自定义 uvicorn 日志格式
+log_config = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "default": {
+            "()": "uvicorn.logging.DefaultFormatter",
+            "fmt": "%(asctime)s - %(levelprefix)s %(message)s",
+            "datefmt": "%Y-%m-%d %H:%M:%S",
+            "use_colors": True,
+        },
+        "access": {
+            "()": "uvicorn.logging.AccessFormatter",
+            "fmt": '%(asctime)s - %(levelprefix)s %(client_addr)s - "%(request_line)s" %(status_code)s',
+            "datefmt": "%Y-%m-%d %H:%M:%S",
+            "use_colors": True,
+        },
+    },
+    "handlers": {
+        "default": {
+            "formatter": "default",
+            "class": "logging.StreamHandler",
+            "stream": "ext://sys.stderr",
+        },
+        "access": {
+            "formatter": "access",
+            "class": "logging.StreamHandler",
+            "stream": "ext://sys.stdout",
+        },
+    },
+    "loggers": {
+        "uvicorn": {"handlers": ["default"], "level": "INFO", "propagate": False},
+        "uvicorn.error": {"level": "INFO"},
+        "uvicorn.access": {"handlers": ["access"], "level": "INFO", "propagate": False},
+    },
+}
 
 
 async def periodic_cleanup():
@@ -119,7 +169,7 @@ security_schemes = {
         "type": "http",
         "scheme": "bearer",
         "bearerFormat": "JWT",
-        "description": "请输入 API Token"
+        "description": "请输入 API Token",
     }
 }
 
@@ -164,11 +214,11 @@ app = FastAPI(
         {"name": "爬虫服务-Jira", "description": "Jira 爬虫相关接口"},
         {"name": "爬虫任务-kms", "description": "KMS 爬虫相关接口"},
         {"name": "知识库服务-Dify", "description": "Dify 知识库相关接口"},
-        {"name": "系统监控", "description": "系统监控相关接口"}
+        {"name": "系统监控", "description": "系统监控相关接口"},
     ],
     swagger_ui_parameters={"defaultModelsExpandDepth": -1},
     openapi_extra={"components": {"securitySchemes": security_schemes}},
-    security=[{"BearerAuth": []}]
+    security=[{"BearerAuth": []}],
 )
 
 # 添加中间件
@@ -182,6 +232,7 @@ app.add_middleware(
 app.add_middleware(APILoggingMiddleware)
 # 使用环境变量中的 API_TOKEN 值来初始化 Bearer Token 中间件
 app.add_middleware(BearerTokenMiddleware, token_env_var="API_TOKEN")
+
 
 @app.get("/", tags=["根路径"], include_in_schema=False)
 def get_root():
@@ -203,6 +254,7 @@ logger.info(f"访问API文档: {link_redoc}")
 
 # 默认8000端口，支持外部端口号定义
 if __name__ == "__main__":
+    # 启动 uvicorn 服务器，使用自定义日志配置
     uvicorn.run(
-        "api.main:app", host="localhost", port=API_ROOT_PORT, reload=True, root_path=API_ROOT_PATH
+        "api.main:app", host="0.0.0.0", port=API_ROOT_PORT, reload=True, log_config=log_config
     )

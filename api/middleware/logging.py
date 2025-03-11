@@ -88,6 +88,24 @@ class APILoggingMiddleware(BaseHTTPMiddleware):
                 # 保存日志
                 try:
                     with get_db_context() as db:
+                        # 检查响应内容类型，处理二进制响应
+                        response_content = None
+                        if response and response_body:
+                            content_type = response.headers.get("content-type", "")
+                            if any(binary_type in content_type.lower() for binary_type in [
+                                "application/zip", "application/gzip", "application/x-gzip", 
+                                "application/octet-stream", "image/", "audio/", "video/"
+                            ]):
+                                # 二进制内容，不尝试解码
+                                response_content = "[Binary Content]"
+                            else:
+                                # 尝试解码文本内容
+                                try:
+                                    response_content = response_body.decode()
+                                except UnicodeDecodeError:
+                                    # 如果解码失败，标记为二进制内容
+                                    response_content = "[Binary Content]"
+                        
                         log_entry = ApiLog(
                             client_ip=client_ip,
                             request_path=path,
@@ -95,7 +113,7 @@ class APILoggingMiddleware(BaseHTTPMiddleware):
                             request_params=json.dumps(params) if params else None,
                             request_body=body_str,
                             response_status=response.status_code if response else 500,
-                            response_body=response_body.decode() if response else None,
+                            response_body=response_content,
                             user_agent=user_agent,
                             duration_ms=duration,
                             error_message=error_message

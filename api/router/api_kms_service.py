@@ -3,7 +3,6 @@
 import os
 import shutil
 import asyncio
-import tempfile
 import logging
 
 from datetime import datetime
@@ -12,7 +11,7 @@ from uuid import UUID, uuid4
 
 from fastapi import Depends, HTTPException, Query, APIRouter, Security
 from fastapi.security import HTTPBearer
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
 from sqlmodel import Session, select
 
 from api.database.models import Task
@@ -20,9 +19,10 @@ from api.database.db import get_db, engine
 from api.models.request import CrawlKMSRequest
 from api.models.response import TaskStatus, TaskResponse, TaskList, BinaryFileSchema
 from api.router.api_service import TEMP_DIR
+from api.utils import create_streaming_zip_response, create_streaming_targz_response, validate_task_for_download
 
 # 配置日志
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("uvicorn")
 
 # 定义安全方案仅用于 API 文档生成
 security_scheme = HTTPBearer(
@@ -273,7 +273,7 @@ async def list_kms_tasks(
     query = query.offset(skip).limit(limit).order_by(Task.created_at.desc())
 
     tasks = db.exec(query).all()
-    total = tasks.count(0)
+    total = len(tasks)
 
     return TaskList(
         tasks=[
@@ -305,65 +305,52 @@ async def kms_task_callback(task_id: UUID, db: Session = Depends(get_db)) -> dic
     return {"status": "received"}
 
 
-@router.get(
-    "/download/{task_id}",
-    response_class=FileResponse,
-    responses={200: {"model": BinaryFileSchema, "description": "返回ZIP格式的爬虫结果文件"}},
-)
-async def download_kms_result(task_id: UUID, db: Session = Depends(get_db)) -> FileResponse:
-    """下载KMS任务结果."""
+@router.get("/download/{task_id}", response_class=StreamingResponse)
+async def download_kms_result(
+    task_id: UUID,
+    format: str = Query("zip", description="下载格式，支持 zip 或 tar.gz"),
+    db: Session = Depends(get_db)
+) -> StreamingResponse:
+    """
+    下载 KMS 任务结果（流式响应）
+
+    Args:
+        task_id: 任务ID
+        format: 下载格式，支持 zip 或 tar.gz，默认为 zip
+        db: 数据库会话
+
+    Returns:
+        StreamingResponse: 流式响应，包含压缩后的任务结果文件
+    """
     try:
-        task = get_kms_task_by_id(task_id, db)
-        if not task:
-            raise HTTPException(status_code=404, detail="Task not found")
+        # 验证任务是否可下载
+        result = await validate_task_for_download(task_id, db, get_kms_task_by_id, TEMP_DIR)
+        task_dir = result["task_dir"]
 
-        if task.status != "completed":
-            raise HTTPException(
-                status_code=400, detail=f"Task is not completed (current status: {task.status})"
-            )
-
-        # 检查源目录
-        task_dir = os.path.join(TEMP_DIR, str(task_id))
-        logger.info(f"Checking task directory: {task_dir}")
-
-        if not os.path.exists(task_dir):
-            raise HTTPException(status_code=404, detail="任务目录不存在，请重新建立任务")
-
-        # 创建临时zip文件
-        zip_name = f"kms_result_{task_id}.zip"
-        fd, zip_path = tempfile.mkstemp(suffix=".zip")
-        os.close(fd)
-
-        try:
-            # 创建ZIP文件
-            logger.info(f"Creating ZIP archive from {task_dir} to {zip_path}")
-            base_path = os.path.splitext(zip_path)[0]  # 移除.zip后缀
-            shutil.make_archive(base_path, "zip", task_dir)
-
-            return FileResponse(
-                path=zip_path,
-                filename=zip_name,
-                media_type="application/zip",
-                headers={"Content-Disposition": f'attachment; filename="{zip_name}"'},
-            )
-        except Exception as e:
-            # 清理临时文件
-            if os.path.exists(zip_path):
-                os.unlink(zip_path)
-            raise HTTPException(status_code=500, detail=f"Failed to create ZIP file: {str(e)}")
+        # 根据格式选择不同的下载方式
+        if format.lower() == "tar.gz":
+            # 创建TAR.GZ文件名
+            file_name = f"kms_result_{task_id}.tar.gz"
+            # 返回流式TAR.GZ响应
+            return await create_streaming_targz_response(task_dir, file_name, task_id)
+        else:
+            # 创建ZIP文件名
+            file_name = f"kms_result_{task_id}.zip"
+            # 返回流式ZIP响应
+            return await create_streaming_zip_response(task_dir, file_name, task_id)
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Download failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Download failed: {str(e)}")
+        logger.error(f"下载 KMS 任务结果失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"下载 KMS 任务结果失败: {str(e)}")
 
 
 @router.delete(
     "/task/{task_id}",
     responses={
         200: {"description": "任务已删除"},
-        400: {"description": "任务尚未完成，请等待任务完成后再删除}"},
+        400: {"description": "任务尚未完成，请等待任务完成后再删除"},
     },
 )
 async def delete_kms_task(task_id: UUID, db: Session = Depends(get_db)) -> dict:

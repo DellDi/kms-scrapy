@@ -9,8 +9,8 @@ from datetime import datetime
 from typing import Optional, List
 from uuid import UUID, uuid4
 
-from fastapi import HTTPException, Depends, Query, Security
-from fastapi.responses import FileResponse
+from fastapi import HTTPException, Depends, Query, Security, APIRouter
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlmodel import Session, select
 from fastapi.security import HTTPBearer
 
@@ -27,8 +27,15 @@ from api.models.response import (
     TaskStatus,
 )
 
+from api.utils import (
+    create_streaming_zip_response,
+    create_streaming_targz_response,
+    validate_task_for_download,
+)
+
+
 # 配置日志
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("uvicorn")
 
 # 定义安全方案仅用于 API 文档生成
 security_scheme = HTTPBearer(
@@ -253,7 +260,7 @@ async def list_tasks(
     query = query.offset(skip).limit(limit).order_by(Task.created_at.desc())
 
     tasks = db.exec(query).all()
-    total = tasks.count(0)
+    total = len(tasks)
 
     return TaskList(
         tasks=[
@@ -285,58 +292,45 @@ async def task_callback(task_id: UUID, db: Session = Depends(get_db)) -> dict:
     return {"status": "received"}
 
 
-@router.get(
-    "/download/{task_id}",
-    response_class=FileResponse,
-    responses={200: {"model": BinaryFileSchema, "description": "返回ZIP格式的爬虫结果文件"}},
-)
-async def download_result(task_id: UUID, db: Session = Depends(get_db)) -> FileResponse:
-    """下载任务结果."""
+@router.get("/download/{task_id}", response_class=StreamingResponse)
+async def download_result(
+    task_id: UUID,
+    format: str = Query("zip", description="下载格式，支持 zip 或 tar.gz"),
+    db: Session = Depends(get_db),
+) -> StreamingResponse:
+    """
+    下载爬虫任务结果（流式响应）
+
+    Args:
+        task_id: 任务ID
+        format: 下载格式，支持 zip 或 tar.gz，默认为 zip
+        db: 数据库会话
+
+    Returns:
+        StreamingResponse: 流式响应，包含压缩后的任务结果文件
+    """
     try:
-        task = get_task_by_id(task_id, db)
-        if not task:
-            raise HTTPException(status_code=404, detail="Task not found")
+        # 验证任务是否可下载
+        result = await validate_task_for_download(task_id, db, get_task_by_id, TEMP_DIR)
+        task_dir = result["task_dir"]
 
-        if task.status != "completed":
-            raise HTTPException(
-                status_code=400, detail=f"Task is not completed (current status: {task.status})"
-            )
-
-        # 检查源目录
-        task_dir = os.path.join(TEMP_DIR, str(task_id))
-        logger.info(f"Checking task directory: {task_dir}")
-
-        if not os.path.exists(task_dir):
-            raise HTTPException(status_code=404, detail="任务目录不存在，请重新建立任务")
-
-        # 创建临时zip文件
-        zip_name = f"scrap_result_{task_id}.zip"
-        fd, zip_path = tempfile.mkstemp(suffix=".zip")
-        os.close(fd)
-
-        try:
-            # 创建ZIP文件
-            logger.info(f"Creating ZIP archive from {task_dir} to {zip_path}")
-            base_path = os.path.splitext(zip_path)[0]  # 移除.zip后缀
-            shutil.make_archive(base_path, "zip", task_dir)
-
-            return FileResponse(
-                path=zip_path,
-                filename=zip_name,
-                media_type="application/zip",
-                headers={"Content-Disposition": f'attachment; filename="{zip_name}"'},
-            )
-        except Exception as e:
-            # 清理临时文件
-            if os.path.exists(zip_path):
-                os.unlink(zip_path)
-            raise HTTPException(status_code=500, detail=f"Failed to create ZIP file: {str(e)}")
+        # 根据格式选择不同的下载方式
+        if format.lower() == "tar.gz":
+            # 创建TAR.GZ文件名
+            file_name = f"scrap_result_{task_id}.tar.gz"
+            # 返回流式TAR.GZ响应
+            return await create_streaming_targz_response(task_dir, file_name, task_id)
+        else:
+            # 创建ZIP文件名
+            file_name = f"scrap_result_{task_id}.zip"
+            # 返回流式ZIP响应
+            return await create_streaming_zip_response(task_dir, file_name, task_id)
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Download failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Download failed: {str(e)}")
+        logger.error(f"下载任务结果失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"下载任务结果失败: {str(e)}")
 
 
 @router.delete(
