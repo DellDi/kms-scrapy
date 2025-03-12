@@ -11,7 +11,7 @@ from datetime import datetime
 from pathlib import Path
 
 from dify import DifyClient, DatasetManager
-from .config import API_KEY, BASE_URL, DEFAULT_INPUT_DIR, SUPPORTED_FILE_EXTENSIONS, DATASET_NAME_PREFIX, MAX_DOCS_PER_DATASET
+from dify.config import API_KEY, BASE_URL, DEFAULT_INPUT_DIR, SUPPORTED_FILE_EXTENSIONS, DATASET_NAME_PREFIX, MAX_DOCS_PER_DATASET
 from dotenv import load_dotenv
 
 # 载入环境变量

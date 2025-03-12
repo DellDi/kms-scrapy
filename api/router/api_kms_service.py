@@ -172,7 +172,8 @@ async def run_kms_crawler(task_id: UUID, start_url: str, **kwargs) -> None:
             crawler_cmd = [
                 "uv",
                 "run",
-                "crawler/main.py",
+                "-m",
+                "crawler.main",
                 "--start_url",
                 start_url,
                 "--output_dir",

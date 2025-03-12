@@ -156,7 +156,8 @@ async def run_crawler(task_id: UUID, **kwargs) -> None:
             cmd = [
                 "uv",
                 "run",
-                "jira/main.py",
+                "-m",
+                "jira.main",
                 "--jql",
                 task.jql,
                 "--output_dir",

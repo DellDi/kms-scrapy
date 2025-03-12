@@ -10,7 +10,7 @@ import os
 import json
 import logging
 import requests
-from ..config import (
+from dify.config import (
     BASE_URL as DEFAULT_BASE_URL,
     EMBEDDING_PROVIDER_DICT,
     EMBEDDING_DEFAULT_PROCESS_RULE,

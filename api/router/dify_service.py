@@ -167,8 +167,10 @@ async def run_dify_uploader(task_id: UUID, **kwargs) -> None:
 
             # 构建命令
             cmd = [
-                "python",
-                "dify/main.py",
+                "uv",
+                "run",
+                "-m",
+                "dify.main",
                 "--dataset-prefix",
                 task.dataset_prefix,
                 "--max-docs",
@@ -179,6 +181,7 @@ async def run_dify_uploader(task_id: UUID, **kwargs) -> None:
                 kwargs.get("indexing_technique", "high_quality"),
             ]
 
+            logger.info(f"Running command: {' '.join(cmd)}")
             # 异步执行命令
             process = await asyncio.create_subprocess_exec(
                 *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE

@@ -7,7 +7,7 @@ from typing import Dict, List, Optional
 import re
 
 from ..api.client import DifyClient
-from ..config import MAX_DOCS_PER_DATASET, DATASET_NAME_PREFIX, DATASET_NAME_PATTERN
+from dify.config import MAX_DOCS_PER_DATASET, DATASET_NAME_PREFIX, DATASET_NAME_PATTERN
 
 class DatasetManager:
     """数据集管理器"""
