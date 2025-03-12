@@ -91,7 +91,9 @@ def format_attachment(element: Tag, key: str) -> tuple[str, Dict[str, str]]:
     title = element.text.strip()
     url = element["href"]
     # /secure/attachment/355909/screenshot-1.png => f"{key}-attachment/355909/screenshot-1.png
-    md_link = f"{key}-attachments{url.replace('/secure/attachment', '')}"
+    # md_link = f"{key}-attachments{url.replace('/secure/attachment', '')}"
+    md_link = f"{config.spider.base_url}{url}"
+    logger.info(f"Attachment URL: {url}")
     return f"[{title}]({md_link})", {"name": title, "url": url}
 
 
@@ -300,7 +302,6 @@ class JiraSpider:
             # 创建问题专属的附件目录
             attachment_dir = os.path.join(page_dir, f"{issue_key}-attachments")
             os.makedirs(attachment_dir, exist_ok=True)
-
             # 构造完整的文件路径
             file_path = os.path.join(attachment_dir, filename)
 

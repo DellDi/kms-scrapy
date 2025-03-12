@@ -39,6 +39,8 @@ class BearerTokenMiddleware(BaseHTTPMiddleware):
             "/api/redoc",  # ReDoc UI
             "/api/openapi.json",  # OpenAPI 规范
             "/api/common",
+            "/api/jira/callback",
+            "/api/kms/callback",
         ]
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:

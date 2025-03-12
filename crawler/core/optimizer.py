@@ -16,7 +16,7 @@ class ContentOptimizer(ABC):
     SYSTEM_PROMPT = f"""
         你是一个智能的语义化提炼分析小助手，我可以帮你提取和优化网页内容。
 
-        ⭐️<重要>⭐️如果得到的内容是空白或者没有任何语义的内容，请直接响应输出```md ```即可。
+        <重要>如果得到的内容是空白或者没有任何语义的内容，请直接响应输出```md ```即可。
 
         如果是类似的HTML结构的内容，请转换为适合嵌入向量数据库的Markdown格式，请参照一下要求
 
@@ -335,7 +335,7 @@ class OpenAICompatibleOptimizer(ContentOptimizer):
 
         Args:
             api_key: API密钥
-            api_url: API端点URL
+            api_url: API URL
             model: 模型名称
         """
         self.api_key = api_key or config.openai.api_key
@@ -423,7 +423,8 @@ class HTMLToMarkdownOptimizer(ContentOptimizer):
 
         Args:
             content: HTML内容
-            stream: 不使用
+            spiderUrl: 爬取的原始URL，用于处理相对链接
+            title: 文档标题
         Returns:
             str: Markdown格式的文本
         """
@@ -432,8 +433,33 @@ class HTMLToMarkdownOptimizer(ContentOptimizer):
             content = content.replace("<br>", "<br/>")
             content = content.replace("<hr>", "<hr/>")
 
-            # 顶部加标题和原始问题链接
-            markdown = f"# {title}\n\n"
+            # 预处理视频标签，将其转换为可被 html2text 处理的链接格式
+            video_pattern = r'<video\s+[^>]*src="([^"]+)"[^>]*>(.*?)</video>'
+
+            def video_replacer(match):
+                video_src = match.group(1)
+                # 提取视频文件名作为链接文本
+                video_name = video_src.split('/')[-1]
+                return f'<a href="{video_src}">[视频] {video_name}</a>'
+
+            content = re.sub(video_pattern, video_replacer, content, flags=re.DOTALL)
+
+            # 处理 Confluence 风格的相对链接
+            if spiderUrl:
+                # 提取基础URL（域名部分）
+                base_url_match = re.match(r"(https?://[^/]+)", spiderUrl)
+                if base_url_match:
+                    base_url = base_url_match.group(1)
+                    # 将相对路径链接转换为绝对路径
+                    content = re.sub(r'href="(/[^"]+)"', f'href="{base_url}\\1"', content)
+                    # 同样处理视频的 src 属性
+                    content = re.sub(r'src="(/[^"]+)"', f'src="{base_url}\\1"', content)
+
+            # 配置 html2text 转换器的 baseurl
+            if spiderUrl:
+                base_url_match = re.match(r"(https?://[^/]+)", spiderUrl)
+                if base_url_match:
+                    self.h.baseurl = base_url_match.group(1)
 
             # 使用内置转换器处理
             markdown = self.h.handle(content)
@@ -441,6 +467,31 @@ class HTMLToMarkdownOptimizer(ContentOptimizer):
             # 简单的后处理
             markdown = markdown.strip()
             markdown = re.sub(r"\n{3,}", "\n\n", markdown)  # 清理多余空行
+
+            # 修复嵌套链接问题 - 处理格式如 [text](http://domain.com/<http://domain.com/path>) 的链接
+            markdown = re.sub(r"\[([^\]]+)\]\(([^)]+)<(http[^>]+)>\)", r"[\1](\3)", markdown)
+
+            # 修复视频链接中的嵌套URL问题
+            markdown = re.sub(r"\[\[视频\] ([^\]]+)\]\((http[^)]+)<(http[^>]+)>\)", r"[[视频] \1](\3)", markdown)
+
+            # 匹配形如 ![图片名](链接) 的模式，将其转换为[图片名](链接)
+            markdown = re.sub(r"(\s+)!\[(.*?)\](\(.*?\))", r"\1[\2]\3", markdown)
+
+            # 处理空的链接文本，使用链接URL作为链接文本
+            def empty_link_replacer(match):
+                url = match.group(1)
+                # 从URL中提取文件名或最后一部分作为链接文本
+                url_text = url.strip("()")
+                filename = url_text.split("/")[-1].split("?")[0]  # 提取文件名并去除查询参数
+                return f"[{filename}]({url})"
+
+            markdown = re.sub(r"\[\](\([^)]+\))", empty_link_replacer, markdown)
+
+            # 后处理 Confluence 风格链接，将 [链接文本](/pages/viewpage.action?pageId=xxx) 转换为 [链接文本](完整URL)
+            if spiderUrl and base_url_match:
+                base_url = base_url_match.group(1)
+                # 匹配 Markdown 格式的相对链接
+                markdown = re.sub(r"\[([^\]]+)\]\((/[^)]+)\)", f"[\\1]({base_url}\\2)", markdown)
 
             # 后处理添加爬虫说明和时间记录、操作人记录、对应页面地址以md格式输出
             markdown += f"\n\n> 此内容由爬虫自动生成\n"
