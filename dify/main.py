@@ -145,7 +145,7 @@ def process_documents(client: DifyClient, input_dir: str, max_docs: int, dataset
         if files_to_upload:
             logger.info(f"开始上传 {len(files_to_upload)} 个文件...")
             results = dataset_manager.upload_files(
-                files_to_upload, indexing_technique="high_quality"
+                files_to_upload, indexing_technique=INDEXING_TECHNIQUE
             )
             successful_uploads = len([r for r in results if r is not None])
             logger.info(f"成功上传 {successful_uploads} 个文件")
@@ -190,10 +190,11 @@ def main():
         args = parse_args()
 
         # 设置全局变量
-        global DATASET_NAME_PREFIX, MAX_DOCS_PER_DATASET, DEFAULT_INPUT_DIR
+        global DATASET_NAME_PREFIX, MAX_DOCS_PER_DATASET, DEFAULT_INPUT_DIR, INDEXING_TECHNIQUE
         DATASET_NAME_PREFIX = args.dataset_prefix
         MAX_DOCS_PER_DATASET = args.max_docs
         DEFAULT_INPUT_DIR = args.input_dir
+        INDEXING_TECHNIQUE = args.indexing_technique
 
         # 创建Dify客户端
         client = DifyClient(api_key=API_KEY, base_url=BASE_URL)
@@ -203,6 +204,7 @@ def main():
         logger.info(f"数据集前缀: {DATASET_NAME_PREFIX}")
         logger.info(f"每个数据集最大文档数: {MAX_DOCS_PER_DATASET}")
         logger.info(f"输入目录: {DEFAULT_INPUT_DIR}")
+        logger.info(f"索引技术: {INDEXING_TECHNIQUE}")
 
         # 处理文档
         success = process_documents(

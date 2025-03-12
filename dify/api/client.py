@@ -198,7 +198,7 @@ class DifyClient:
             doc_data: 文档内容，可以是文本或结构化数据
             doc_type: 文档类型，'text' 或 'qa_pair'
             doc_name: 文档名称（可选）
-            indexing_technique: 索引技术，'high_quality' 或 'economy'
+            indexing_technique: 索引技术，'high_quality' 'parent' 'qa' 'economy'
 
         Returns:
             Dict: 创建的文档信息
@@ -243,13 +243,14 @@ class DifyClient:
         Args:
             dataset_id: 数据集 ID
             file_path: 本地文件路径
-            indexing_technique: 索引技术，'high_quality' 或 'economy'
+            indexing_technique: 索引技术，'high_quality' 'parent' 'qa' 'economy'
             segmentation: 分段设置，包含separator和max_tokens字段
             retrieval_model: 检索模式
 
         Returns:
             Dict: 上传结果
         """
+        # 检查索引技术是否有效
         if indexing_technique not in ["high_quality", "economy", "parent", "qa"]:
             raise ValueError(
                 "indexing_technique must be either 'high_quality' or 'economy' or 'parent' or 'qa'"
@@ -271,13 +272,22 @@ class DifyClient:
             "qa": "qa_model",  # 问答
         }
 
+        # 保存原始索引技术用于本地处理
+        original_technique = indexing_technique
+        
+        # 将不支持的索引技术映射到服务器支持的值
+        # 注意：API 服务器只接受 'high_quality' 或 'economy'
+        api_indexing_technique = indexing_technique
+        if indexing_technique in ["parent", "qa"]:
+            api_indexing_technique = "high_quality"
+
         # 构建处理规则配置
         rule_config = {
-            "indexing_technique": indexing_technique,
-            "doc_form": doc_form_dict[indexing_technique],
+            "indexing_technique": api_indexing_technique,  # 使用映射后的值
+            "doc_form": doc_form_dict[original_technique],  # 使用原始值确定文档形式
             "doc_language": "Chinese",
             # 自动规则处理
-            "process_rule": indexing_technique_dict[indexing_technique],
+            "process_rule": indexing_technique_dict[original_technique],  # 使用原始值确定处理规则
             "retrieval_model": {
                 "reranking_enable": True,
                 "search_method": "hybrid_search",
@@ -332,7 +342,7 @@ class DifyClient:
         Args:
             dataset_id: 数据集 ID
             file_paths: 本地文件路径列表
-            indexing_technique: 索引技术，'high_quality' 或 'economy'
+            indexing_technique: 索引技术，'high_quality' 'parent' 'qa' 'economy'
         Returns:
             List[Dict]: 每个文件的上传结果
         """

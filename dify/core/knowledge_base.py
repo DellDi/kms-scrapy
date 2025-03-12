@@ -170,7 +170,7 @@ class DatasetManager:
         Args:
             content: 文档内容
             name: 文档名称（可选）
-            indexing_technique: 索引技术，'high_quality' 或 'economy'
+            indexing_technique: 索引技术，'high_quality' 'parent' 'qa' 'economy'
 
         Returns:
             Dict: 创建的文档信息
@@ -194,7 +194,7 @@ class DatasetManager:
 
         Args:
             file_paths: 文件路径列表
-            indexing_technique: 索引技术，'high_quality' 或 'economy'
+            indexing_technique: 索引技术，'high_quality' 'parent' 'qa' 'economy'
             process_rule: 处理规则，'custom' 或 'advanced'
 
         Returns:
