@@ -483,7 +483,7 @@ class HTMLToMarkdownOptimizer(ContentOptimizer):
                 # 从URL中提取文件名或最后一部分作为链接文本
                 url_text = url.strip("()")
                 filename = url_text.split("/")[-1].split("?")[0]  # 提取文件名并去除查询参数
-                return f"[{filename}]({url})"
+                return f"[{filename}]{url}"
 
             markdown = re.sub(r"\[\](\([^)]+\))", empty_link_replacer, markdown)
 
