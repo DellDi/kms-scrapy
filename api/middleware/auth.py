@@ -47,10 +47,6 @@ class BearerTokenMiddleware(BaseHTTPMiddleware):
         如果请求路径在白名单中，或者请求头中包含有效的 Bearer Token，
         则允许请求继续处理；否则返回 401 未授权错误。
         """
-        # 如果未设置 token，跳过验证
-        if not self.token:
-            return await call_next(request)
-
         # 检查路径是否在白名单中
         path = request.url.path
 
