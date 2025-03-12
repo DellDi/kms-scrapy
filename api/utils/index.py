@@ -7,6 +7,8 @@ import io
 import zipfile
 import tarfile
 import asyncio
+import tempfile
+import concurrent.futures
 import logging
 from typing import Dict, Any, AsyncGenerator, Optional
 from uuid import UUID
@@ -185,15 +187,12 @@ async def create_streaming_targz_response(
     async def calculate_targz_size():
         total_size = 0
         file_count = 0
-        file_list = []
 
         # 收集所有文件信息
         for root, _, files in os.walk(task_dir):
             for file in files:
                 file_path = os.path.join(root, file)
                 file_size = os.path.getsize(file_path)
-                arcname = os.path.relpath(file_path, task_dir)
-                file_list.append((file_path, arcname))
                 total_size += file_size
                 file_count += 1
 
@@ -203,95 +202,102 @@ async def create_streaming_targz_response(
             f"预计算完成: {file_count} 个文件, 原始大小: {total_size/1024/1024:.2f}MB, 估计TAR.GZ大小: {estimated_targz_size/1024/1024:.2f}MB"
         )
 
-        return estimated_targz_size, file_count, file_list
+        return estimated_targz_size, file_count
 
     # 计算估计大小和获取文件列表
-    estimated_size, file_count, file_list = await calculate_targz_size()
+    estimated_size, file_count = await calculate_targz_size()
 
     # 创建真正的流式响应生成器
     async def real_streaming_targz() -> AsyncGenerator[bytes, None]:
-        """真正的流式 TAR.GZ 生成器，边压缩边传输"""
-
-        # 创建读写管道
-        read_fd, write_fd = os.pipe()
-        read_pipe = os.fdopen(read_fd, "rb")
-        write_pipe = os.fdopen(write_fd, "wb")
-
-        # 压缩任务
-        async def compress_task():
-            try:
-                with tarfile.open(fileobj=write_pipe, mode="w|gz", compresslevel=6) as tf:
-                    total_size = 0
-
-                    for file_path, arcname in file_list:
-                        # 添加文件到 TAR.GZ
+        """真正的流式 TAR.GZ 生成器，预先压缩然后流式传输"""
+        
+        # 创建临时文件
+        temp_file = tempfile.NamedTemporaryFile(delete=False)
+        temp_path = temp_file.name
+        temp_file.close()
+        
+        logger.info(f"开始压缩目录到临时文件: {temp_path}")
+        start_time = asyncio.get_event_loop().time()
+        
+        # 在线程池中压缩目录
+        def compress_directory():
+            total_size = 0
+            with tarfile.open(temp_path, "w:gz", compresslevel=6) as tf:
+                # 添加目录中的所有文件，保留相对路径
+                for root, _, files in os.walk(task_dir):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        arcname = os.path.relpath(file_path, task_dir)
                         tf.add(file_path, arcname=arcname)
-
+                        
                         # 统计信息
                         file_size = os.path.getsize(file_path)
                         total_size += file_size
-
+                        
                         # 定期记录日志
                         if total_size % (50 * 1024 * 1024) < file_size:  # 每 50MB 记录一次
                             logger.info(f"已压缩(tar.gz): {total_size/1024/1024:.2f}MB")
-
-                logger.info(
-                    f"压缩完成(tar.gz): {file_count} 个文件, 总大小: {total_size/1024/1024:.2f}MB"
-                )
-            except Exception as e:
-                logger.error(f"创建 TAR.GZ 文件失败: {str(e)}")
-            finally:
-                # 关闭写入管道
-                write_pipe.close()
-
-        # 在后台启动压缩任务
-        compress_task_obj = asyncio.create_task(compress_task())
-
-        # 从读取管道中读取数据并返回
-        bytes_sent = 0
-        start_time = asyncio.get_event_loop().time()
-
+            
+            return total_size
+        
+        # 在线程池中执行压缩
+        loop = asyncio.get_event_loop()
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            total_size = await loop.run_in_executor(executor, compress_directory)
+        
+        # 记录压缩完成信息
+        compress_time = asyncio.get_event_loop().time() - start_time
+        compressed_size = os.path.getsize(temp_path)
+        logger.info(
+            f"压缩完成(tar.gz): {file_count} 个文件, 原始大小: {total_size/1024/1024:.2f}MB, "
+            f"压缩后大小: {compressed_size/1024/1024:.2f}MB, 耗时: {compress_time:.2f}秒, "
+            f"压缩比: {compressed_size/total_size*100:.2f}%, "
+            f"压缩速度: {total_size/(1024*1024*compress_time) if compress_time > 0 else 0:.2f}MB/s"
+        )
+        
+        # 流式传输临时文件
         try:
-            while True:
-                # 从管道读取数据
-                chunk = await asyncio.get_event_loop().run_in_executor(
-                    None, read_pipe.read, chunk_size
-                )
-                if not chunk:
-                    break
-
-                bytes_sent += len(chunk)
-                yield chunk
-
-                # 每 10MB 记录一次日志
-                if bytes_sent % (10 * 1024 * 1024) < chunk_size:
-                    elapsed = asyncio.get_event_loop().time() - start_time
-                    speed = bytes_sent / (1024 * 1024 * elapsed) if elapsed > 0 else 0
-                    logger.info(
-                        f"已传输(tar.gz): {bytes_sent/1024/1024:.2f}MB, 速度: {speed:.2f}MB/s"
-                    )
-
-            # 等待压缩任务完成
-            await compress_task_obj
-
+            bytes_sent = 0
+            transfer_start_time = asyncio.get_event_loop().time()
+            
+            with open(temp_path, "rb") as f:
+                while True:
+                    chunk = await loop.run_in_executor(None, f.read, chunk_size)
+                    if not chunk:
+                        break
+                    
+                    bytes_sent += len(chunk)
+                    yield chunk
+                    
+                    # 每 10MB 记录一次日志
+                    if bytes_sent % (10 * 1024 * 1024) < chunk_size:
+                        elapsed = asyncio.get_event_loop().time() - transfer_start_time
+                        speed = bytes_sent / (1024 * 1024 * elapsed) if elapsed > 0 else 0
+                        logger.info(
+                            f"已传输(tar.gz): {bytes_sent/1024/1024:.2f}MB, 速度: {speed:.2f}MB/s"
+                        )
+            
             # 记录总传输信息
-            total_time = asyncio.get_event_loop().time() - start_time
+            total_transfer_time = asyncio.get_event_loop().time() - transfer_start_time
             logger.info(
                 f"传输完成(tar.gz): 总大小 {bytes_sent/1024/1024:.2f}MB, "
-                f"耗时 {total_time:.2f}秒, "
-                f"平均速度 {bytes_sent/(1024*1024*total_time) if total_time > 0 else 0:.2f}MB/s"
+                f"耗时 {total_transfer_time:.2f}秒, "
+                f"平均速度 {bytes_sent/(1024*1024*total_transfer_time) if total_transfer_time > 0 else 0:.2f}MB/s"
+            )
+            
+            # 记录整体完成信息
+            total_time = asyncio.get_event_loop().time() - start_time
+            logger.info(
+                f"下载完成(tar.gz): 总耗时 {total_time:.2f}秒, "
+                f"压缩耗时: {compress_time:.2f}秒, 传输耗时: {total_transfer_time:.2f}秒"
             )
         finally:
-            # 关闭读取管道
-            read_pipe.close()
-
-            # 如果压缩任务还在运行，取消它
-            if not compress_task_obj.done():
-                compress_task_obj.cancel()
-                try:
-                    await compress_task_obj
-                except asyncio.CancelledError:
-                    pass
+            # 删除临时文件
+            try:
+                os.unlink(temp_path)
+                logger.info(f"已删除临时文件: {temp_path}")
+            except Exception as e:
+                logger.error(f"删除临时文件失败: {str(e)}")
 
     # 返回流式响应，不包含 Content-Length 头
     headers = {
