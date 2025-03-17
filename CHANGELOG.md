@@ -5,6 +5,8 @@
   * 添加 `/api/openapi.yaml` 端点，提供 YAML 格式的 API 文档
   * 添加 pyyaml 依赖以支持 YAML 格式输出
   * 自定义 OpenAPI 文档生成逻辑
+  * 添加浏览器友好的 YAML 查看选项 `/api/openapi.yaml/view`
+  * 修复 YAML 格式在浏览器中可能出现的乱码问题
 
 - 新增目录扁平化工具 @2025-03-17
   * 在tools目录下添加flatten_directory.py脚本

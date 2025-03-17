@@ -39,6 +39,7 @@ class BearerTokenMiddleware(BaseHTTPMiddleware):
             "/api/redoc",  # ReDoc UI
             "/api/openapi.json",  # OpenAPI 规范
             "/api/openapi.yaml",  # OpenAPI 规范
+            "/api/openapi.yaml/view",  # 浏览器友好的 YAML 查看选项
             "/api/common",
             "/api/jira/callback",
             "/api/kms/callback",
