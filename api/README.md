@@ -40,6 +40,12 @@ api/
   - 可用于生成客户端代码
   - 支持第三方工具导入
 
+- **OpenAPI YAML**：http://localhost:8000/api/openapi.yaml
+  - OpenAPI规范的YAML格式
+  - 更易于阅读和编辑
+  - 适合版本控制和文档管理
+  - 支持导入到API设计工具
+
 ## 主要功能
 
 ### 1. 爬虫任务管理

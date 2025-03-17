@@ -3,13 +3,16 @@ import uvicorn
 import logging
 from logging.handlers import RotatingFileHandler
 import os
-import sys
 import shutil
 from datetime import datetime
 from dotenv import load_dotenv
 
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.utils import get_openapi
+from fastapi.responses import JSONResponse, HTMLResponse, FileResponse, Response
+import yaml
+import json
 
 from contextlib import asynccontextmanager
 
@@ -245,12 +248,43 @@ app.include_router(kms_router)
 app.include_router(dify_router)
 
 
+# 自定义 OpenAPI 文档生成，支持 YAML 格式
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    openapi_schema = get_openapi(
+        title=app.title,
+        version="1.0.0",
+        description=app.description,
+        routes=app.routes,
+    )
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+
+# 添加 YAML 格式的 OpenAPI 文档路由
+@app.get("/api/openapi.yaml", include_in_schema=False)
+async def get_openapi_yaml():
+    openapi_schema = custom_openapi()
+    yaml_content = yaml.dump(openapi_schema, sort_keys=False)
+    return Response(content=yaml_content, media_type="text/yaml")
+
+
+# 添加 JSON 格式的 OpenAPI 文档路由（可选，如果想要自定义路径）
+@app.get("/api/openapi.json", include_in_schema=False)
+async def get_openapi_json():
+    openapi_schema = custom_openapi()
+    return JSONResponse(content=openapi_schema)
+
+
 # 链接加粗
 base_url = f"http://localhost:{API_ROOT_PORT}{API_ROOT_PATH}"
 link_doc = f"\033[1m{base_url}/api/docs\033[0m"
 link_redoc = f"\033[1m{base_url}/api/redoc\033[0m"
+link_openapi_yaml = f"\033[1m{base_url}/api/openapi.yaml\033[0m"
 logger.info(f"访问API文档: {link_doc}")
 logger.info(f"访问API文档: {link_redoc}")
+logger.info(f"访问YAML格式OpenAPI文档: {link_openapi_yaml}")
 
 # 默认8000端口，支持外部端口号定义
 if __name__ == "__main__":

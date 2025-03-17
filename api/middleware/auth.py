@@ -38,6 +38,7 @@ class BearerTokenMiddleware(BaseHTTPMiddleware):
             "/api/docs",  # Swagger UI
             "/api/redoc",  # ReDoc UI
             "/api/openapi.json",  # OpenAPI 规范
+            "/api/openapi.yaml",  # OpenAPI 规范
             "/api/common",
             "/api/jira/callback",
             "/api/kms/callback",

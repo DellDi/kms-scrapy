@@ -2,6 +2,11 @@
 #    uv pip compile pyproject.toml -o requirements.txt
 annotated-types==0.7.0
     # via pydantic
+anyio==4.9.0
+    # via
+    #   httpx
+    #   openai
+    #   starlette
 attrs==25.1.0
     # via
     #   service-identity
@@ -11,11 +16,16 @@ automat==24.8.1
 beautifulsoup4==4.13.3
     # via kms (pyproject.toml)
 certifi==2025.1.31
-    # via requests
+    # via
+    #   httpcore
+    #   httpx
+    #   requests
 cffi==1.17.1
     # via cryptography
 charset-normalizer==3.4.1
     # via requests
+click==8.1.8
+    # via uvicorn
 constantly==23.10.4
     # via twisted
 cryptography==44.0.1
@@ -29,16 +39,30 @@ cssselect==1.2.0
     #   scrapy
 defusedxml==0.7.1
     # via scrapy
+distro==1.9.0
+    # via openai
+fastapi==0.110.0
+    # via kms (pyproject.toml)
 filelock==3.17.0
     # via tldextract
 greenlet==3.1.1
     # via playwright
+h11==0.14.0
+    # via
+    #   httpcore
+    #   uvicorn
 html2text==2024.2.26
     # via kms (pyproject.toml)
+httpcore==1.0.7
+    # via httpx
+httpx==0.28.1
+    # via openai
 hyperlink==21.0.0
     # via twisted
 idna==3.10
     # via
+    #   anyio
+    #   httpx
     #   hyperlink
     #   requests
     #   tldextract
@@ -50,6 +74,8 @@ itemadapter==0.11.0
     #   scrapy
 itemloaders==1.3.2
     # via scrapy
+jiter==0.9.0
+    # via openai
 jmespath==1.0.1
     # via
     #   itemloaders
@@ -61,6 +87,8 @@ lxml==5.3.1
     #   python-pptx
     #   scrapy
 nest-asyncio==1.6.0
+    # via kms (pyproject.toml)
+openai==1.66.3
     # via kms (pyproject.toml)
 packaging==24.2
     # via
@@ -91,7 +119,11 @@ pyasn1-modules==0.4.1
 pycparser==2.22
     # via cffi
 pydantic==2.10.6
-    # via kms (pyproject.toml)
+    # via
+    #   kms (pyproject.toml)
+    #   fastapi
+    #   openai
+    #   sqlmodel
 pydantic-core==2.27.2
     # via pydantic
 pydispatcher==2.0.7
@@ -110,6 +142,8 @@ python-magic==0.4.27
     # via kms (pyproject.toml)
 python-pptx==1.0.2
     # via kms (pyproject.toml)
+pyyaml==6.0.2
+    # via kms (pyproject.toml)
 queuelib==1.7.0
     # via scrapy
 requests==2.32.3
@@ -127,24 +161,40 @@ setuptools==75.8.2
     # via
     #   incremental
     #   zope-interface
+sniffio==1.3.1
+    # via
+    #   anyio
+    #   openai
 soupsieve==2.6
     # via beautifulsoup4
+sqlalchemy==2.0.30
+    # via sqlmodel
+sqlmodel==0.0.24
+    # via kms (pyproject.toml)
+starlette==0.36.3
+    # via fastapi
 tldextract==5.1.3
     # via scrapy
+tqdm==4.67.1
+    # via openai
 twisted==24.11.0
     # via scrapy
 typing-extensions==4.12.2
     # via
     #   beautifulsoup4
+    #   fastapi
+    #   openai
     #   pydantic
     #   pydantic-core
     #   pyee
-    #   pyopenssl
     #   python-docx
     #   python-pptx
+    #   sqlalchemy
     #   twisted
 urllib3==2.3.0
     # via requests
+uvicorn==0.29.0
+    # via kms (pyproject.toml)
 w3lib==2.3.1
     # via
     #   parsel
@@ -155,9 +205,3 @@ zope-interface==7.2
     # via
     #   scrapy
     #   twisted
-
-# API服务依赖
-fastapi==0.110.0
-uvicorn==0.29.0
-sqlmodel==0.0.16
-sqlalchemy==2.0.30
