@@ -22,6 +22,7 @@ wheels/
 *.egg
 *.db
 api/temp*
+temp/
 
 # Virtual Environment
 venv/

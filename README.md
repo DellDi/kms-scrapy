@@ -278,6 +278,40 @@ uv run api/main.py
 - 支持跨域请求(CORS)
 - OpenAPI/Swagger文档
 
+### 工具集合
+
+#### 目录扁平化工具
+
+将嵌套目录中的所有文件提取到一个扁平化的输出目录中，自动处理文件名冲突。
+
+```bash
+uv run -m tools.flatten_directory [输入目录] [参数选项]
+```
+
+支持的命令行参数：
+- `[输入目录]`: 要扁平化的目录路径（必填）
+- `-o, --output-dir`: 输出目录路径（默认为: [输入目录]_flattened）
+- `--include-hidden`: 包含隐藏文件（默认忽略）
+- `--include-system-files`: 包含系统文件如.DS_Store（默认忽略）
+- `--ignore`: 额外的忽略文件模式，支持正则表达式
+
+例如：
+```bash
+# 基本用法
+uv run -m tools.flatten_directory ./docs
+
+# 指定输出目录
+uv run -m tools.flatten_directory ./docs -o ./flat_docs
+
+# 包含隐藏文件但忽略特定模式
+uv run -m tools.flatten_directory ./docs --include-hidden --ignore "*.tmp" "*.bak"
+```
+
+工具会自动：
+- 忽略系统文件（如 .DS_Store）和隐藏文件
+- 处理文件名冲突（通过添加文件哈希值）
+- 保留原始文件的元数据（修改时间等）
+
 ## 项目结构
 
 ```
@@ -303,6 +337,8 @@ uv run api/main.py
 │   │   └── knowledge_base.py # 知识库管理
 │   ├── examples/     # 使用示例
 │   └── utils/        # 工具函数
+├── tools/           # 实用工具集合
+│   └── flatten_directory.py # 目录扁平化工具
 ├── api/             # API服务模块
 │   ├── database/     # 数据库模型和配置
 │   │   ├── db.py      # 数据库连接管理
