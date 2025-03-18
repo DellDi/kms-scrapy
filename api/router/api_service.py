@@ -3,11 +3,14 @@
 import os
 import shutil
 import asyncio
-import tempfile
+import subprocess
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import asynccontextmanager
 import logging
 from datetime import datetime
 from typing import Optional, List
 from uuid import UUID, uuid4
+from pathlib import Path
 
 from fastapi import HTTPException, Depends, Query, Security, APIRouter
 from fastapi.responses import FileResponse, StreamingResponse
@@ -116,7 +119,7 @@ def update_task_status(
 async def start_crawl(request: CrawlRequest, db: Session = Depends(get_db)) -> Task:
     """启动爬虫任务."""
     task_id = uuid4()
-    task_dir = os.path.join(TEMP_DIR, str(task_id))
+    task_dir = str(Path(TEMP_DIR) / str(task_id))
     os.makedirs(task_dir, exist_ok=True)
     logger.info(f"Created task directory: {task_dir}")
 
@@ -139,91 +142,98 @@ async def start_crawl(request: CrawlRequest, db: Session = Depends(get_db)) -> T
     )
 
 
-async def run_crawler(task_id: UUID, **kwargs) -> None:
+async def run_crawler(task_id: UUID, **kwargs):
     """异步运行爬虫任务."""
     try:
-        # 创建新的数据库会话
-        with Session(engine) as db:
-            # 重新获取任务对象
+        # 使用同步会话，因为在线程池中执行
+        db = Session(engine)
+        try:
+            # 获取任务信息
             task = get_task_by_id(task_id, db)
             if not task:
-                logger.error(f"Task not found: {task_id}")
+                logger.error(f"Task {task_id} not found")
                 return
-            # 更新任务状态为运行中
-            update_task_status(task=task, status="running", message="Crawler is running", db=db)
 
-            # 构建命令
-            cmd = [
-                "uv",
-                "run",
-                "-m",
-                "jira.main",
-                "--jql",
-                task.jql,
-                "--output_dir",
-                task.output_dir,
+            # 更新任务状态为运行中
+            update_task_status(task, "running", db=db)
+
+            # 构建命令参数列表
+            cmd_parts = [
+                "uv", "run", "-m", "jira.main",
+                "--jql", task.jql,
+                "--output_dir", task.output_dir,
             ]
 
-            # 添加可选参数
-            # cmd.extend([item for key, value in kwargs.items() if value is not None for item in [f"--{key}", str(value)]])
+            # 从kwargs中获取可选参数
+            optional_params = {
+                "description_limit": kwargs.get("description_limit"),
+                "comments_limit": kwargs.get("comments_limit"),
+                "page_size": kwargs.get("page_size"),
+                "start_at": kwargs.get("start_at")
+            }
 
             # 添加可选参数
-            for key, value in kwargs.items():
-                if value is not None:  # 只添加非None的参数
-                    cmd.append(f"--{key}")
-                    cmd.append(str(value))  # 确保值是字符串
+            for param_name, param_value in optional_params.items():
+                if param_value is not None:
+                    cmd_parts.extend([f"--{param_name}", str(param_value)])
 
-            API_ROOT_PORT = os.getenv("API_ROOT_PORT", 8000)
+            # 获取API根路径
+            API_ROOT_PORT = os.getenv("API_ROOT_PORT", "8000")
             API_ROOT_PATH = os.getenv("API_ROOT_PATH", "")
 
             # 添加回调URL
-            cmd.extend(
-                [
-                    "--callback_url",
-                    f"http://localhost:{API_ROOT_PORT}{API_ROOT_PATH}/api/jira/callback/{task_id}",
-                ]
-            )
+            callback_url = f"http://localhost:{API_ROOT_PORT}{API_ROOT_PATH}/api/jira/callback/{task_id}"
+            cmd_parts.extend(["--callback_url", callback_url])
 
-            # 异步执行爬虫命令
-            process = await asyncio.create_subprocess_exec(
-                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-            )
+            # 记录完整命令
+            cmd_str = " ".join(cmd_parts)
+            logger.info(f"Running command: {cmd_str}")
 
-            # 等待进程完成
-            stdout, stderr = await process.communicate()
-
-            # 在同一个会话中更新状态
-            if process.returncode != 0:
-                # 爬虫执行失败
-                update_task_status(
-                    task=task,
-                    status="failed",
-                    message=f"Crawler failed: {stderr.decode()}",
-                    error=stderr.decode(),
-                    db=db,
+            # 使用线程池执行子进程
+            loop = asyncio.get_event_loop()
+            with ThreadPoolExecutor() as pool:
+                process = await loop.run_in_executor(
+                    pool,
+                    lambda: subprocess.Popen(
+                        cmd_parts,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                        encoding='utf-8',
+                        errors='replace'  # 处理无法解码的字符
+                    )
                 )
-            else:
-                # 爬虫执行成功
-                update_task_status(task=task, status="completed", message="爬虫任务已完成", db=db)
+
+                # 异步读取输出
+                stdout, stderr = await loop.run_in_executor(pool, process.communicate)
+                return_code = process.returncode
+
+                if return_code != 0:
+                    error_msg = f"爬虫进程异常退出，返回码：{return_code}"
+                    if stderr:
+                        error_msg += f"\n错误输出：{stderr}"
+                    raise RuntimeError(error_msg)
+
+        finally:
+            db.close()
 
     except Exception as e:
         # 捕获其他异常
-        error_msg = str(e)
-        logger.error(f"爬虫执行失败：{error_msg}")
+        error_msg = f"爬虫执行失败：{str(e)}"
+        logger.error(error_msg)
+        import traceback
+        logger.error(f"异常详情：\n{traceback.format_exc()}")
         try:
             # 创建新的数据库会话来记录错误
-            with Session(engine) as error_db:
+            error_db = Session(engine)
+            try:
                 task = get_task_by_id(task_id, error_db)
                 if task:
-                    update_task_status(
-                        task=task,
-                        status="failed",
-                        message=f"Error: {error_msg}",
-                        error=error_msg,
-                        db=error_db,
-                    )
-        except Exception as e2:
-            logger.error(f"更新任务状态失败：{e2}")
+                    update_task_status(task, "error", error=error_msg, db=error_db)
+            finally:
+                error_db.close()
+        except Exception as db_error:
+            logger.error(f"更新任务状态失败：{str(db_error)}")
 
 
 @router.get(
@@ -354,7 +364,7 @@ async def delete_task(task_id: UUID, db: Session = Depends(get_db)) -> dict:
         )
 
     # 删除任务目录
-    task_dir = os.path.join(TEMP_DIR, str(task_id))
+    task_dir = str(Path(TEMP_DIR) / str(task_id))
     if os.path.exists(task_dir):
         shutil.rmtree(task_dir)
     else:

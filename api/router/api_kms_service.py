@@ -221,7 +221,7 @@ async def run_kms_crawler(task_id: UUID, start_url: str, **kwargs) -> None:
     except Exception as e:
         # 捕获其他异常
         error_msg = str(e)
-        logger.error(f"KMS爬虫执行失败：{error_msg}")
+        logger.error(f"Confluence爬虫执行失败：{error_msg}")
         try:
             # 创建新的数据库会话来记录错误
             with Session(engine) as error_db:
