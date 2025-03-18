@@ -152,8 +152,9 @@ async def start_dify_upload(
 async def run_dify_uploader(task_id: UUID, **kwargs) -> None:
     """异步运行Dify知识库导入任务."""
     try:
-        # 创建新的数据库会话
-        with Session(engine) as db:
+        # 使用同步会话，因为在线程池中执行
+        db = Session(engine)
+        try:
             # 重新获取任务对象
             task = get_dify_task_by_id(task_id, db)
             if not task:
@@ -181,60 +182,82 @@ async def run_dify_uploader(task_id: UUID, **kwargs) -> None:
                 kwargs.get("indexing_technique", "high_quality"),
             ]
 
-            logger.info(f"Running command: {' '.join(cmd)}")
-            # 异步执行命令
-            process = await asyncio.create_subprocess_exec(
-                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-            )
+            # 记录完整命令
+            cmd_str = " ".join(cmd)
+            logger.info(f"Running command: {cmd_str}")
 
-            # 等待进程完成
-            stdout, stderr = await process.communicate()
-
-            # 在同一个会话中更新状态
-            if process.returncode != 0:
-                # 执行失败
-                update_dify_task_status(
-                    task=task,
-                    status="failed",
-                    message=f"Dify uploader failed: {stderr.decode()}",
-                    error=stderr.decode(),
-                    db=db,
+            # 使用线程池执行子进程
+            from concurrent.futures import ThreadPoolExecutor
+            import subprocess
+            loop = asyncio.get_event_loop()
+            
+            with ThreadPoolExecutor() as pool:
+                process = await loop.run_in_executor(
+                    pool,
+                    lambda: subprocess.Popen(
+                        cmd,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                        encoding='utf-8',
+                        errors='replace'  # 处理无法解码的字符
+                    )
                 )
-            else:
-                # 执行成功
-                # 解析输出以获取上传统计信息
-                stdout_text = stdout.decode()
-                total_files = 0
-                successful_uploads = 0
 
-                for line in stdout_text.splitlines():
-                    if "总文件数:" in line:
-                        try:
-                            total_files = int(line.split(":")[-1].strip())
-                        except ValueError:
-                            pass
-                    elif "成功上传:" in line:
-                        try:
-                            successful_uploads = int(line.split(":")[-1].strip())
-                        except ValueError:
-                            pass
+                # 异步读取输出
+                stdout, stderr = await loop.run_in_executor(pool, process.communicate)
+                return_code = process.returncode
 
-                update_dify_task_status(
-                    task=task,
-                    status="completed",
-                    message="Dify知识库导入任务已完成",
-                    total_files=total_files,
-                    successful_uploads=successful_uploads,
-                    db=db,
-                )
+                # 在同一个会话中更新状态
+                if return_code != 0:
+                    # 执行失败
+                    update_dify_task_status(
+                        task=task,
+                        status="failed",
+                        message=f"Dify uploader failed: {stderr}",
+                        error=stderr,
+                        db=db,
+                    )
+                else:
+                    # 执行成功
+                    # 解析输出以获取上传统计信息
+                    stdout_text = stdout
+                    total_files = 0
+                    successful_uploads = 0
+
+                    for line in stdout_text.splitlines():
+                        if "总文件数:" in line:
+                            try:
+                                total_files = int(line.split(":")[-1].strip())
+                            except ValueError:
+                                pass
+                        elif "成功上传:" in line:
+                            try:
+                                successful_uploads = int(line.split(":")[-1].strip())
+                            except ValueError:
+                                pass
+
+                    update_dify_task_status(
+                        task=task,
+                        status="completed",
+                        message="Dify知识库导入任务已完成",
+                        total_files=total_files,
+                        successful_uploads=successful_uploads,
+                        db=db,
+                    )
+        finally:
+            db.close()
 
     except Exception as e:
         # 捕获其他异常
         error_msg = str(e)
         logger.error(f"Dify知识库导入执行失败：{error_msg}")
+        import traceback
+        logger.error(f"异常详情：\n{traceback.format_exc()}")
         try:
             # 创建新的数据库会话来记录错误
-            with Session(engine) as error_db:
+            error_db = Session(engine)
+            try:
                 task = get_dify_task_by_id(task_id, error_db)
                 if task:
                     update_dify_task_status(
@@ -244,6 +267,8 @@ async def run_dify_uploader(task_id: UUID, **kwargs) -> None:
                         error=error_msg,
                         db=error_db,
                     )
+            finally:
+                error_db.close()
         except Exception as e2:
             logger.error(f"更新任务状态失败：{e2}")
 

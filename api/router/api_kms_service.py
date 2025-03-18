@@ -134,7 +134,7 @@ async def start_kms_crawl(request: CrawlKMSRequest, db: Session = Depends(get_db
 
     # 异步启动爬虫
     asyncio.create_task(
-        run_kms_crawler(
+        run_confluence_crawler(
             task_id=task_id,
             start_url=request.start_url,
             **request.model_dump(exclude={"start_url"}),
@@ -147,11 +147,12 @@ async def start_kms_crawl(request: CrawlKMSRequest, db: Session = Depends(get_db
     )
 
 
-async def run_kms_crawler(task_id: UUID, start_url: str, **kwargs) -> None:
-    """异步运行KMS爬虫任务."""
+async def run_confluence_crawler(task_id: UUID, start_url: str, **kwargs) -> None:
+    """异步运行Confluence爬虫任务."""
     try:
-        # 创建新的数据库会话
-        with Session(engine) as db:
+        # 使用同步会话，因为在线程池中执行
+        db = Session(engine)
+        try:
             # 获取任务信息
             task = get_kms_task_by_id(task_id, db)
             if not task:
@@ -166,7 +167,7 @@ async def run_kms_crawler(task_id: UUID, start_url: str, **kwargs) -> None:
             # 准备爬虫命令
             output_dir = task.output_dir
 
-            API_ROOT_PORT = os.getenv("API_ROOT_PORT", 8000)
+            API_ROOT_PORT = os.getenv("API_ROOT_PORT", "8000")
             API_ROOT_PATH = os.getenv("API_ROOT_PATH", "")
             # 构建爬虫命令
             crawler_cmd = [
@@ -188,43 +189,62 @@ async def run_kms_crawler(task_id: UUID, start_url: str, **kwargs) -> None:
                     crawler_cmd.append(f"--{key}")
                     crawler_cmd.append(str(value))  # 确保值是字符串
 
-            logger.info(f"执行爬虫命令: {' '.join(crawler_cmd)}")
+            # 记录完整命令
+            cmd_str = " ".join(crawler_cmd)
+            logger.info(f"执行爬虫命令: {cmd_str}")
 
-            # 执行爬虫命令
-            process = await asyncio.create_subprocess_exec(
-                *crawler_cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-
-            # 等待爬虫完成
-            stdout, stderr = await process.communicate()
-
-            # 检查爬虫执行结果
-            if process.returncode != 0:
-                # 爬虫执行失败
-                error_msg = stderr or "爬虫执行失败，未知错误"
-                logger.error(f"爬虫执行失败: {error_msg}")
-                update_kms_task_status(
-                    task=task,
-                    status="failed",
-                    message="爬虫执行失败",
-                    error=error_msg,
-                    db=db,
+            # 使用线程池执行子进程
+            loop = asyncio.get_event_loop()
+            from concurrent.futures import ThreadPoolExecutor
+            import subprocess
+            
+            with ThreadPoolExecutor() as pool:
+                process = await loop.run_in_executor(
+                    pool,
+                    lambda: subprocess.Popen(
+                        crawler_cmd,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                        encoding='utf-8',
+                        errors='replace'  # 处理无法解码的字符
+                    )
                 )
-            else:
-                # 爬虫执行成功
-                update_kms_task_status(
-                    task=task, status="completed", message="KMS爬虫任务已完成", db=db
-                )
+
+                # 异步读取输出
+                stdout, stderr = await loop.run_in_executor(pool, process.communicate)
+                return_code = process.returncode
+
+                # 检查爬虫执行结果
+                if return_code != 0:
+                    # 爬虫执行失败
+                    error_msg = stderr or "爬虫执行失败，未知错误"
+                    logger.error(f"爬虫执行失败: {error_msg}")
+                    update_kms_task_status(
+                        task=task,
+                        status="failed",
+                        message="爬虫执行失败",
+                        error=error_msg,
+                        db=db,
+                    )
+                else:
+                    # 爬虫执行成功
+                    update_kms_task_status(
+                        task=task, status="completed", message="KMS爬虫任务已完成", db=db
+                    )
+        finally:
+            db.close()
 
     except Exception as e:
         # 捕获其他异常
         error_msg = str(e)
         logger.error(f"Confluence爬虫执行失败：{error_msg}")
+        import traceback
+        logger.error(f"异常详情：\n{traceback.format_exc()}")
         try:
             # 创建新的数据库会话来记录错误
-            with Session(engine) as error_db:
+            error_db = Session(engine)
+            try:
                 task = get_kms_task_by_id(task_id, error_db)
                 if task:
                     update_kms_task_status(
@@ -234,6 +254,8 @@ async def run_kms_crawler(task_id: UUID, start_url: str, **kwargs) -> None:
                         error=error_msg,
                         db=error_db,
                     )
+            finally:
+                error_db.close()
         except Exception as e2:
             logger.error(f"更新任务状态失败：{e2}")
 
