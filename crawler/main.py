@@ -70,15 +70,16 @@ def parse_args():
         help="优化器类型 html2md xunfei baichuan compatible",
     )
 
-    parser.add_argument("--api_key", type=str, help="兼容openai API密钥")
+    # 允许空值传递的参数
+    parser.add_argument("--api_key", type=str, nargs="?", const="", default=None, help="兼容openai API密钥")
 
-    parser.add_argument("--api_url", type=str, help="兼容兼容openai APIURL")
+    parser.add_argument("--api_url", type=str, nargs="?", const="", default=None, help="兼容openai APIURL")
 
-    parser.add_argument("--model", type=str, help="兼容openai的模型")
+    parser.add_argument("--model", type=str, nargs="?", const="", default=None, help="兼容openai的模型")
 
     # 接口模式下无需指定输出目录，由接口自动生成
     parser.add_argument("--output_dir", type=str, default=config.spider.output_dir, help="输出目录")
-    parser.add_argument("--callback_url", type=str, help="回调URL")
+    parser.add_argument("--callback_url", type=str, default=None, help="回调URL")
 
     return parser.parse_args()
 
@@ -96,9 +97,14 @@ def main():
         # 更新配置
         config.spider.output_dir = args.output_dir
         config.spider.optimizer_type = args.optimizer_type
-        config.openai.api_key = args.api_key if args.api_key else config.openai.api_key
-        config.openai.api_url = args.api_url if args.api_url else config.openai.api_url
-        config.openai.model = args.model if args.model else config.openai.model
+
+        # 处理空值传递 - 如果参数为None，保留默认值；如果是空字符串，则设置为空字符串
+        if args.api_key is not None:
+            config.openai.api_key = args.api_key
+        if args.api_url is not None:
+            config.openai.api_url = args.api_url
+        if args.model is not None:
+            config.openai.model = args.model
 
         logger.info(f"输出目录: {config.spider.output_dir}")
         # 创建输出目录
@@ -158,7 +164,7 @@ def main():
         logger.info("-" * 50)
 
         # 执行回调
-        if args.callback_url:
+        if args.callback_url is not None and args.callback_url != "":
             logger.info("执行成功回调...")
             try:
                 response = requests.post(args.callback_url)
