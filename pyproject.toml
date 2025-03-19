@@ -28,6 +28,8 @@ dependencies = [
     "uvicorn>=0.23.0",        # ASGI服务器
     "sqlmodel>=0.0.23",  # 添加SQLModel依赖
     "pyyaml>=6.0.0",     # 支持YAML格式的OpenAPI输出
+    "markdown>=3.5.0",   # Markdown解析支持
+    "pypandoc>=1.11",    # Markdown转Word支持
 ]
 
 windows = ["python-magic-bin>=0.4.14"]

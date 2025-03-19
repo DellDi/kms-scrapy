@@ -1,6 +1,20 @@
 ## [Unreleased]
 
 ### Added
+- 新增 Markdown 转 Word 工具 @2025-03-19
+  * 添加 `tools/md_to_word.py` 脚本，支持将 Markdown 文件转换为 Word 文档
+  * 支持保留 Markdown 格式（标题、列表、表格、代码块等）
+  * 支持保留原始目录结构或扁平化输出
+  * 支持使用自定义 Word 模板
+  * 优化中文内容显示
+
+- 新增一键扁平化并转换为 Word 工具 @2025-03-19
+  * 添加 `tools/flatten_and_convert.py` 脚本
+  * 结合目录扁平化和 Markdown 转 Word 功能
+  * 支持一键完成从嵌套目录到 Word 文档的转换
+  * 提供灵活的流程控制选项
+  * 支持自定义输出路径和处理参数
+
 - 新增 YAML 格式的 OpenAPI 文档支持 @2025-03-17
   * 添加 `/api/openapi.yaml` 端点，提供 YAML 格式的 API 文档
   * 添加 pyyaml 依赖以支持 YAML 格式输出
@@ -108,6 +122,12 @@
   - 创建 TreeExtractor 类专门处理导航树解析逻辑
   - 从 ConfluenceSpider 类中分离树结构处理代码
   - 改善代码组织结构，提高可维护性
+
+## [0.3.1] - 2025-03-19
+* 🚀 重构 Markdown 转 Word 工具，使用 pypandoc 替代自定义实现
+* ✨ 简化代码，提高转换质量和兼容性
+* 🔧 修复 NoneType 元素处理问题
+* 📦 添加 pypandoc 依赖
 
 ### 优化
 - 改进导航树节点提取逻辑 @2025-02-07

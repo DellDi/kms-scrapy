@@ -14,9 +14,7 @@ import shutil
 import argparse
 import hashlib
 import math
-from pathlib import Path
 from typing import Optional, Dict, Set, Tuple, List
-from datetime import datetime
 
 
 class DirectoryFlattener:
@@ -24,19 +22,23 @@ class DirectoryFlattener:
 
     # 默认忽略的文件模式
     DEFAULT_IGNORE_PATTERNS = [
-        r'\.DS_Store$',  # macOS系统文件
-        r'^\._.*',      # macOS元数据文件
-        r'Thumbs\.db$', # Windows缩略图文件
-        r'desktop\.ini$', # Windows桌面配置文件
-        r'\.$',         # 当前目录
-        r'\.\.$'        # 上级目录
+        r"\.DS_Store$",  # macOS系统文件
+        r"^\._.*",  # macOS元数据文件
+        r"Thumbs\.db$",  # Windows缩略图文件
+        r"desktop\.ini$",  # Windows桌面配置文件
+        r"\.$",  # 当前目录
+        r"\.\.$",  # 上级目录
     ]
 
-    def __init__(self, input_dir: str, output_dir: Optional[str] = None,
-                 ignore_patterns: Optional[List[str]] = None,
-                 ignore_hidden: bool = True,
-                 ignore_system_files: bool = True,
-                 page_size: Optional[int] = None):
+    def __init__(
+        self,
+        input_dir: str,
+        output_dir: Optional[str] = None,
+        ignore_patterns: Optional[List[str]] = None,
+        ignore_hidden: bool = True,
+        ignore_system_files: bool = True,
+        page_size: Optional[int] = None,
+    ):
         """
         初始化目录扁平化处理器
 
@@ -80,7 +82,7 @@ class DirectoryFlattener:
         file_name = os.path.basename(file_path)
 
         # 检查是否为隐藏文件
-        if self.ignore_hidden and file_name.startswith('.'):
+        if self.ignore_hidden and file_name.startswith("."):
             return True
 
         # 检查是否匹配忽略模式
@@ -167,7 +169,9 @@ class DirectoryFlattener:
             print(f"\n已忽略 {self.skipped_files} 个系统文件或隐藏文件")
 
         if self.page_size is not None and self.page_size > 0:
-            print(f"\n扁平化完成! 所有文件已按每页 {self.page_size} 个文件分组，共 {self.page_count} 页")
+            print(
+                f"\n扁平化完成! 所有文件已按每页 {self.page_size} 个文件分组，共 {self.page_count} 页"
+            )
             print(f"输出目录: {self.output_dir}")
         else:
             print(f"\n扁平化完成! 所有文件已复制到: {self.output_dir}")
@@ -224,38 +228,24 @@ def main():
     parser = argparse.ArgumentParser(
         description="将一个文件夹内的所有深度的文件复制提取出来，到一个一维的扁平化的输出路径的文件夹内"
     )
+    parser.add_argument("input_dir", type=str, help="输入目录路径")
     parser.add_argument(
-        "input_dir",
-        type=str,
-        help="输入目录路径"
-    )
-    parser.add_argument(
-        "-o", "--output-dir",
+        "-o",
+        "--output-dir",
         type=str,
         default=None,
-        help="输出目录路径 (默认为: input_dir_flattened)"
+        help="输出目录路径 (默认为: input_dir_flattened)",
     )
+    parser.add_argument("--include-hidden", action="store_true", help="包含隐藏文件 (默认忽略)")
     parser.add_argument(
-        "--include-hidden",
-        action="store_true",
-        help="包含隐藏文件 (默认忽略)"
+        "--include-system-files", action="store_true", help="包含系统文件如.DS_Store (默认忽略)"
     )
-    parser.add_argument(
-        "--include-system-files",
-        action="store_true",
-        help="包含系统文件如.DS_Store (默认忽略)"
-    )
-    parser.add_argument(
-        "--ignore",
-        type=str,
-        nargs="+",
-        help="额外的忽略文件模式，支持正则表达式"
-    )
+    parser.add_argument("--ignore", type=str, nargs="+", help="额外的忽略文件模式，支持正则表达式")
     parser.add_argument(
         "--page-size",
         type=int,
         default=None,
-        help="分页大小，指定每个子文件夹中包含的文件数量 (默认不分页)"
+        help="分页大小，指定每个子文件夹中包含的文件数量 (默认不分页)",
     )
 
     args = parser.parse_args()
@@ -272,7 +262,7 @@ def main():
         ignore_patterns=args.ignore,
         ignore_hidden=not args.include_hidden,
         ignore_system_files=not args.include_system_files,
-        page_size=args.page_size
+        page_size=args.page_size,
     )
     flattener.flatten()
 

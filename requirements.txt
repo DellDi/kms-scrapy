@@ -86,6 +86,8 @@ lxml==5.3.1
     #   python-docx
     #   python-pptx
     #   scrapy
+markdown==3.7
+    # via kms (pyproject.toml)
 nest-asyncio==1.6.0
     # via kms (pyproject.toml)
 openai==1.66.3
@@ -132,6 +134,8 @@ pyee==12.1.1
     # via playwright
 pyopenssl==25.0.0
     # via scrapy
+pypandoc==1.15
+    # via kms (pyproject.toml)
 pytesseract==0.3.13
     # via kms (pyproject.toml)
 python-docx==1.1.2
