@@ -61,7 +61,7 @@ class OptimizerConfig:
 
     api_key: str = ""  # 优化器API密钥
     api_url: str = ""  # 优化器API地址
-    optimizer_type: str = "xunfei"  # 使用的优化器类型
+    optimizer_type: str = "html2md"  # 使用的优化器类型
 
 
 @dataclass

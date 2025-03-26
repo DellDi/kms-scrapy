@@ -37,7 +37,7 @@ class SpiderConfig:
 class OptimizerConfig:
     api_key: str = ""  # 优化器API密钥
     api_url: str = ""  # 优化器API地址
-    optimizer_type: str = "xunfei"  # 使用的优化器类型
+    optimizer_type: str = "html2md"  # 使用的优化器类型
 
 @dataclass
 class ExporterConfig:
@@ -73,7 +73,7 @@ config = Config()
 ### 2.3 优化器配置 (OptimizerConfig)
 - api_key: API密钥
 - api_url: API服务地址
-- optimizer_type: 使用的优化器类型(xunfei/baichuan等)
+- optimizer_type: 使用的优化器类型(html2md/xunfei/baichuan/compatible等)
 
 ### 2.4 导出器配置 (ExporterConfig)
 - output_dir: 输出目录路径
