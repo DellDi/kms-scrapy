@@ -33,6 +33,14 @@
   * 支持自定义工单标题、描述和经办人
   * 实现与Jira系统的认证和交互
 
+- 新增工具使用示例文档和改进README @2025-03-30
+  * 创建 `examples` 目录，添加各种工具的命令行使用示例文档
+  * 重构 README.md，保留工具详细使用说明，并引导用户参考示例文档
+  * 添加 `examples/flatten_directory_examples.md` 目录扁平化工具示例
+  * 添加 `examples/md_to_word_examples.md` Markdown转Word工具示例
+  * 添加 `examples/flatten_and_convert_examples.md` 扁平化并转换工具示例
+  * 更新项目结构说明，包含新增的examples目录
+
 ### Changed
 - 优化爬虫和API服务模块 @2025-03-08
   * 改进内容处理和优化逻辑

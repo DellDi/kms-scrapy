@@ -89,17 +89,6 @@ source .venv/bin/activate  # Linux/macOS
 uv pip install -e .  # 通过 pyproject.toml 安装项目及其依赖
 ```
 
-或者使用传统的 pip 安装：
-
-```bash
-python -m venv .venv
-source .venv/bin/activate  # Linux/macOS
-# 或
-.venv\Scripts\activate  # Windows
-
-pip install -r requirements.txt
-```
-
 3. 配置环境变量：
 
 ```bash
@@ -146,7 +135,7 @@ attachment_filters: Dict[str, Any] = {
 3. 运行爬虫：
 
 ```bash
-uv run crawler/main.py [参数选项]
+uv run -m crawler.main [参数选项]
 ```
 
 支持的命令行参数：
@@ -158,7 +147,7 @@ uv run crawler/main.py [参数选项]
 例如：
 
 ```bash
-uv run crawler/main.py \
+uv run -m crawler.main \
   --output_dir="./output" \
   --start_url="http://kms.example.com/pages/123" \
   --callback_url="http://localhost:8000/api/callback"
@@ -171,7 +160,7 @@ uv run crawler/main.py \
 1. 运行爬虫：
 
 ```bash
-uv run jira/main.py [参数选项]
+uv run -m jira.main [参数选项]
 ```
 
 支持的命令行参数：
@@ -187,7 +176,7 @@ uv run jira/main.py [参数选项]
 例如：
 
 ```bash
-uv run jira/main.py \
+uv run -m jira.main \
   --page_size=50 \
   --start_at=0 \
   --jql="project = PMS" \
@@ -223,7 +212,7 @@ DIFY_API_ENDPOINT=https://your-dify-instance/v1
 2. 上传文档到知识库：
 
 ```bash
-uv run dify/main.py [参数选项]
+uv run -m dify.main [参数选项]
 ```
 
 支持的命令行参数：
@@ -235,7 +224,7 @@ uv run dify/main.py [参数选项]
 例如：
 
 ```bash
-uv run dify/main.py \
+uv run -m dify.main \
   --dataset-prefix="KMS-" \
   --max-docs=200 \
   --input-dir="./output"
@@ -263,7 +252,7 @@ API_ROOT_PORT=8000  # API服务端口
 2. 启动服务：
 
 ```bash
-uv run api/main.py
+uv run -m api.main
 ```
 
 3. 访问 API 文档：
@@ -290,9 +279,10 @@ uv run api/main.py
 
 #### 目录扁平化工具
 
-将嵌套目录中的所有文件提取到一个扁平化的输出目录中，自动处理文件名冲突。
+将嵌套目录结构扁平化，解决深层次目录的管理问题。
 
 ```bash
+# 基本用法
 uv run -m tools.flatten_directory [输入目录] [参数选项]
 ```
 
@@ -304,7 +294,7 @@ uv run -m tools.flatten_directory [输入目录] [参数选项]
 - `--include-system-files`: 包含系统文件如.DS_Store（默认忽略）
 - `--ignore`: 额外的忽略文件模式，支持正则表达式
 
-例如：
+示例：
 
 ```bash
 # 基本用法
@@ -317,6 +307,8 @@ uv run -m tools.flatten_directory ./docs -o ./flat_docs
 uv run -m tools.flatten_directory ./docs --include-hidden --ignore "*.tmp" "*.bak"
 ```
 
+更多示例请参考 [examples/flatten_directory_examples.md](examples/flatten_directory_examples.md)
+
 工具会自动：
 
 - 忽略系统文件（如 .DS_Store）和隐藏文件
@@ -326,6 +318,20 @@ uv run -m tools.flatten_directory ./docs --include-hidden --ignore "*.tmp" "*.ba
 #### Markdown 转 Word 工具
 
 将 Markdown 文件转换为 Word 文档格式，支持保留格式和样式。
+
+```bash
+# 基本用法
+uv run -m tools.md_to_word [输入目录] [参数选项]
+```
+
+支持的命令行参数：
+
+- `[输入目录]`: 包含 Markdown 文件的目录路径（必填）
+- `-o, --output-dir`: 输出 Word 文档的目录路径（默认为: [输入目录]_word）
+- `--flat`: 扁平化输出，不保留原始目录结构
+- `--template`: 自定义 Word 模板路径
+
+示例：
 
 ```bash
 # 基本用法
@@ -341,6 +347,8 @@ uv run -m tools.md_to_word ./docs --flat
 uv run -m tools.md_to_word ./docs --template ./template.docx
 ```
 
+更多示例请参考 [examples/md_to_word_examples.md](examples/md_to_word_examples.md)
+
 工具支持：
 
 - 保留 Markdown 格式（标题、列表、表格、代码块等）
@@ -354,39 +362,41 @@ uv run -m tools.md_to_word ./docs --template ./template.docx
 
 ```bash
 # 基本用法
+uv run -m tools.flatten_and_convert [输入目录] [参数选项]
+```
+
+支持的命令行参数：
+
+- `[输入目录]`: 要处理的目录路径（必填）
+- `-o, --output-dir`: 输出目录路径（默认为: [输入目录]_converted）
+- `--skip-flatten`: 跳过扁平化步骤，直接转换为 Word
+- `--skip-word`: 只执行扁平化，不转换为 Word
+- `--no-convert`: 不转换，直接复制文件
+- `--preserve-structure`: 保留目录结构
+- `--page-size`: 分页功能，每页文件数量
+- `--overwrite`: 覆盖输出目录
+- `--copy-non-md`: 复制非 Markdown 文件到目标目录
+
+示例：
+
+```bash
+# 基本用法
 uv run -m tools.flatten_and_convert ./docs
 
 # 指定最终输出目录
 uv run -m tools.flatten_and_convert ./docs -o ./processed_docs
 
-# 跳过扁平化步骤，直接转换为 Word
-uv run -m tools.flatten_and_convert ./docs --skip-flatten
-
-# 只执行扁平化，不转换为 Word
-uv run -m tools.flatten_and_convert ./docs --skip-word
-
-# 使用分页功能，每页100个文件，保留目录结构
-uv run -m tools.flatten_and_convert 输入目录 -o 输出目录 --page-size 100 --preserve-structure
-
-# 跳过转换，直接复制文件，覆盖输出目录
-uv run -m tools.flatten_and_convert 输入目录 -o 输出目录 --no-convert --overwrite
-
-# 转换为Word文档，保留目录结构，覆盖输出目录
-uv run -m tools.flatten_and_convert 输入目录 -o 输出目录 --preserve-structure --overwrite
-
-# 转换为Word文档，同时复制非Markdown文件到目标目录
-uv run -m tools.flatten_and_convert 输入目录 -o 输出目录 --copy-non-md
-
-# 转换为Word文档，保留目录结构，同时复制非Markdown文件到目标目录
-uv run -m tools.flatten_and_convert 输入目录 -o 输出目录 --preserve-structure --copy-non-md
-uv run -m tools.flatten_and_convert api/temp_scrapy/2ea4d312-12b8-496a-b941-dbdc5ce08b22 -o temp_word_with_non_md --page-size 100 --preserve-structure --overwrite --copy-non-md
 ```
+
+完整示例请参考 [examples/flatten_and_convert_examples.md](examples/flatten_and_convert_examples.md)
 
 工具支持：
 
 - 一键完成从嵌套目录到 Word 文档的转换
 - 灵活控制处理流程和输出位置
 - 保留所有子工具的高级选项
+- 分页功能和保留目录结构
+- 复制非Markdown文件到目标目录
 
 ## 项目结构
 
@@ -417,6 +427,10 @@ uv run -m tools.flatten_and_convert api/temp_scrapy/2ea4d312-12b8-496a-b941-dbdc
 │   └── flatten_directory.py # 目录扁平化工具
 │   └── md_to_word.py # Markdown 转 Word 工具
 │   └── flatten_and_convert.py # 一键扁平化并转换为 Word
+├── examples/        # 使用示例和演示代码
+│   ├── flatten_directory_examples.md # 目录扁平化示例
+│   ├── md_to_word_examples.md        # Markdown转Word示例
+│   └── flatten_and_convert_examples.md # 扁平化并转换示例
 ├── api/             # API服务模块
 │   ├── database/     # 数据库模型和配置
 │   │   ├── db.py      # 数据库连接管理
