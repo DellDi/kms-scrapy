@@ -255,7 +255,7 @@ async def get_task_status(task_id: UUID, db: Session = Depends(get_db)) -> TaskS
 
 
 @router.get(
-    "/api/tasks",
+    "/tasks",
     response_model=TaskList,
 )
 async def list_tasks(

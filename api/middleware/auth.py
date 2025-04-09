@@ -54,6 +54,11 @@ class BearerTokenMiddleware(BaseHTTPMiddleware):
         # 检查路径是否在白名单中
         path = request.url.path
 
+        # --- 在这里加入对 OPTIONS 的判断 ---
+        if request.method == "OPTIONS":
+            # 如果是 OPTIONS 请求，直接调用下一个中间件/路由，不进行认证
+            return await call_next(request)
+
         # 精确匹配根路径
         if path == "/":
             return await call_next(request)
