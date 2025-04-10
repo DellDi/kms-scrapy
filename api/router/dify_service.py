@@ -27,15 +27,13 @@ logger = logging.getLogger("uvicorn")
 
 # 定义安全方案仅用于 API 文档生成
 security_scheme = HTTPBearer(
-    scheme_name="Bearer Token",
-    description="请输入 API Token",
-    auto_error=False
+    scheme_name="Bearer Token", description="请输入 API Token", auto_error=False
 )
 
 router = APIRouter(
     prefix="/api/dify",
     tags=["知识库服务-Dify"],
-    dependencies=[Security(security_scheme)]  # 为所有路由添加 Bearer Token 认证
+    dependencies=[Security(security_scheme)],  # 为所有路由添加 Bearer Token 认证
 )
 
 
@@ -157,6 +155,8 @@ async def run_dify_uploader(task_id: UUID, **kwargs) -> None:
         try:
             # 重新获取任务对象
             task = get_dify_task_by_id(task_id, db)
+            DIFY_API_KEY = os.getenv("DIFY_API_KEY", "")
+            DIFY_BASE_URL = os.getenv("DIFY_BASE_URL", "https://poc.new-see.com:88/v1")
             if not task:
                 logger.error(f"Task not found: {task_id}")
                 return
@@ -180,6 +180,10 @@ async def run_dify_uploader(task_id: UUID, **kwargs) -> None:
                 task.input_dir,
                 "--indexing-technique",
                 kwargs.get("indexing_technique", "high_quality"),
+                "--base-url",
+                kwargs.get("base_url", DIFY_BASE_URL),
+                "--api-key",
+                kwargs.get("api_key", DIFY_API_KEY),
             ]
 
             # 记录完整命令
@@ -189,8 +193,9 @@ async def run_dify_uploader(task_id: UUID, **kwargs) -> None:
             # 使用线程池执行子进程
             from concurrent.futures import ThreadPoolExecutor
             import subprocess
+
             loop = asyncio.get_event_loop()
-            
+
             with ThreadPoolExecutor() as pool:
                 process = await loop.run_in_executor(
                     pool,
@@ -199,9 +204,9 @@ async def run_dify_uploader(task_id: UUID, **kwargs) -> None:
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
                         text=True,
-                        encoding='utf-8',
-                        errors='replace'  # 处理无法解码的字符
-                    )
+                        encoding="utf-8",
+                        errors="replace",  # 处理无法解码的字符
+                    ),
                 )
 
                 # 异步读取输出
@@ -253,6 +258,7 @@ async def run_dify_uploader(task_id: UUID, **kwargs) -> None:
         error_msg = str(e)
         logger.error(f"Dify知识库导入执行失败：{error_msg}")
         import traceback
+
         logger.error(f"异常详情：\n{traceback.format_exc()}")
         try:
             # 创建新的数据库会话来记录错误
@@ -449,12 +455,19 @@ async def create_jira_itops(
             "customfield_10000": "13163",
             "customfield_12600": "15865",
             "customfield_12600:1": "15866",
-            "priority": "3", # 优先级
+            "priority": "3",  # 优先级
             "hasWorkStarted": "false",
         }
 
         # fieldsToRetain 参数需要特殊处理
-        fields_to_retain = ["project", "issuetype", "assignee", "customfield_10000", "customfield_12600", "priority"]
+        fields_to_retain = [
+            "project",
+            "issuetype",
+            "assignee",
+            "customfield_10000",
+            "customfield_12600",
+            "priority",
+        ]
 
         # 设置创建工单的请求头
         create_headers = {
@@ -492,7 +505,9 @@ async def create_jira_itops(
         )
 
         logger.info(f"创建工单响应状态码: {create_response.status_code}")
-        logger.info(f"创建工单响应内容: {create_response.text[:500]}")  # 只记录前500个字符，避免日志过大
+        logger.info(
+            f"创建工单响应内容: {create_response.text[:500]}"
+        )  # 只记录前500个字符，避免日志过大
 
         # 检查创建是否成功
         if create_response.status_code != 200:

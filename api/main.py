@@ -117,8 +117,8 @@ async def periodic_cleanup():
 
 
 async def cleanup_old_tasks(db: Session = Depends(get_db)) -> None:
-    """清理超过24小时的任务数据."""
-    cutoff_time = datetime.now().timestamp() - 86400 * 7  # 7天
+    """清理超过28天的任务数据."""
+    cutoff_time = datetime.now().timestamp() - 86400 * 28  # 28天
     query = select(Task).where(Task.start_time < cutoff_time)
     old_tasks = db.exec(query).all()
 
@@ -132,8 +132,8 @@ async def cleanup_old_tasks(db: Session = Depends(get_db)) -> None:
 
 
 async def cleanup_old_dify_tasks(db: Session = Depends(get_db)) -> None:
-    """清理超过7天的Dify任务上传数据记录."""
-    cutoff_time = datetime.now().timestamp() - 86400 * 7  # 7天
+    """清理超过28天的Dify任务上传数据记录."""
+    cutoff_time = datetime.now().timestamp() - 86400 * 28 # 28天
     query = select(DifyTask).where(DifyTask.start_time < cutoff_time)
     old_tasks = db.exec(query).all()
 

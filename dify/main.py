@@ -88,6 +88,20 @@ def parse_args():
         help=f"索引技术 (默认: high_quality)",
     )
 
+    parser.add_argument(
+        "--base-url",
+        type=str,
+        default=BASE_URL,
+        help=f"Dify API 地址 (默认: {BASE_URL})",
+    )
+
+    parser.add_argument(
+        "--api-key",
+        type=str,
+        default=API_KEY,
+        help="Dify API 密钥"
+    )
+
     return parser.parse_args()
 
 
@@ -197,10 +211,10 @@ def main():
         INDEXING_TECHNIQUE = args.indexing_technique
 
         # 创建Dify客户端
-        client = DifyClient(api_key=API_KEY, base_url=BASE_URL)
+        client = DifyClient(api_key=args.api_key, base_url=args.base_url)
         logger.info("Dify客户端初始化完成")
-        logger.info(f"API密钥: {'*' * 16}{API_KEY[-4:] if len(API_KEY) > 4 else API_KEY}")
-        logger.info(f"API地址: {BASE_URL}")
+        logger.info(f"API密钥: {'*' * 16}{args.api_key[-4:] if len(args.api_key) > 4 else args.api_key}")
+        logger.info(f"API地址: {args.base_url}")
         logger.info(f"数据集前缀: {DATASET_NAME_PREFIX}")
         logger.info(f"每个数据集最大文档数: {MAX_DOCS_PER_DATASET}")
         logger.info(f"输入目录: {DEFAULT_INPUT_DIR}")

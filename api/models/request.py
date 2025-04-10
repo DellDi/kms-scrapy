@@ -3,6 +3,14 @@
 from pydantic import BaseModel, Field
 
 
+# 载入环境变量
+load_dotenv()
+
+# 从环境变量获取API根路径，默认为空字符串
+DIFY_BASE_URL = os.getenv("DIFY_BASE_URL", "https://poc.new-see.com:88/v1")
+
+
+
 class CrawlRequest(BaseModel):
     """爬虫请求模型."""
 
@@ -78,6 +86,16 @@ class DifyUploadRequest(BaseModel):
         default="high_quality",
         description="索引技术-高质量(默认), 经济, 父子检索, 问答",
         choices=["high_quality", "economy", "parent", "qa"],
+    )
+
+    base_url: str = Field(
+        default=DIFY_BASE_URL,
+        description="Dify知识库的API地址",
+    )
+
+    api_key: str = Field(
+        default="",
+        description="Dify知识库的API key",
     )
 
     class Config:
