@@ -65,12 +65,8 @@ class BearerTokenMiddleware(BaseHTTPMiddleware):
 
         # 对于其他路径，使用更精确的匹配规则
         for wp in self.whitelist_paths:
-            # 精确匹配完整路径
-            if path == wp:
-                return await call_next(request)
-
-            # 对于 API 文档路径，允许子路径访问
-            if path.startswith(wp):
+            # 精确匹配完整路径 或包 含在白名单路径中
+            if path == wp or wp in path:
                 return await call_next(request)
 
         # 获取并验证 Authorization 头
