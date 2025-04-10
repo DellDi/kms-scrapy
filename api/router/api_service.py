@@ -371,6 +371,6 @@ async def delete_task(task_id: UUID, db: Session = Depends(get_db)) -> dict:
         logger.warning(f"任务目录不存在：{task_dir}")
 
     # 删除数据库记录
-    db.exec(Task).filter(Task.id == task_id).delete()
+    db.delete(task)
     db.commit()
     return {"status": "200", "message": "任务已删除"}
