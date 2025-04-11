@@ -231,6 +231,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Content-Disposition", "Content-Type", "Content-Length", "X-Custom-Header"],
 )
 app.add_middleware(APILoggingMiddleware)
 # 使用环境变量中的 API_TOKEN 值来初始化 Bearer Token 中间件
