@@ -88,7 +88,7 @@ class Config:
         self.openai = OpenAIConfig(
             api_key=os.getenv("OPENAI_API_KEY"),
             model=os.getenv("OPENAI_API_MODEL"),
-            api_url=os.getenv("OPENAI_API_URL"),
+            api_url=os.getenv("OPENAI_BASE_URL"),
         )
 
 
