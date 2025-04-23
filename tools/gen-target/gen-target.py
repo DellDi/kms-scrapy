@@ -50,7 +50,7 @@ DB_CONFIG = {
 
 # OpenAI配置
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-OPENAI_API_MODEL = os.getenv("OPENAI_API_MODEL", "gpt-3.5-turbo")
+OPENAI_API_MODEL = os.getenv("OPENAI_API_MODEL", "gpt-4.1")
 OPENAI_API_URL = os.getenv("OPENAI_API_URL", "https://api.openai.com/v1")
 
 # 指标类型映射
@@ -292,7 +292,7 @@ class TargetDocGenerator:
 
             for item in items:
                 f.write(item.to_markdown())
-                f.write("\n---\n\n")
+                f.write("\n")
 
         logger.info(f"已生成文档: {file_path}")
 
