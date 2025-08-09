@@ -14,7 +14,7 @@ class AuthManager:
         self.logger = logging.getLogger(__name__)
         self.meta = meta
         # 调用实例方法版本的create_login_request
-        self.login_request = self._create_login_request(meta)
+        self.login_request = self.create_login_request(meta)
 
     @staticmethod
     def get_auth_headers() -> Dict[str, str]:
@@ -30,7 +30,7 @@ class AuthManager:
         }
         return headers
 
-    def _create_login_request(self, meta, original_callback=None) -> FormRequest:
+    def create_login_request(self, meta, original_callback=None) -> FormRequest:
         """创建登录请求 (简化版，依赖 Scrapy 自动处理 Cookie)
         Args:
             meta: 请求元数据

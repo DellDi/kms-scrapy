@@ -2,7 +2,7 @@ import os
 import re
 import logging
 from typing import Optional, List, Dict, Any
-from .content import KMSItem
+from crawler.core.content import KMSItem
 from crawler.core.config import config
 from crawler.utils import safe_makedirs, safe_open
 

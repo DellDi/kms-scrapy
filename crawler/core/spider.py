@@ -2,12 +2,12 @@ import scrapy
 from bs4 import BeautifulSoup
 from datetime import datetime
 
-from .auth import AuthManager
+from crawler.core.auth import AuthManager
 from crawler.core.config import config
-from .content import ContentParser, KMSItem
-from .exporter import DocumentExporter
-from .optimizer import OptimizerFactory
-from .tree_extractor import TreeExtractor
+from crawler.core.content import ContentParser, KMSItem
+from crawler.core.exporter import DocumentExporter
+from crawler.core.optimizer import OptimizerFactory
+from crawler.core.tree_extractor import TreeExtractor
 
 
 class ConfluenceSpider(scrapy.Spider):
@@ -42,7 +42,7 @@ class ConfluenceSpider(scrapy.Spider):
     def start_requests(self):
         """首先发送登录请求，登录成功后再开始抓取"""
         # 创建登录请求
-        login_request = self.auth_manager._create_login_request(
+        login_request = self.auth_manager.create_login_request(
             {"original_url": self.start_urls[0]},
             original_callback=self.parse,  # 登录成功后调用parse方法
         )

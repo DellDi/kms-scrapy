@@ -20,7 +20,7 @@ def setup_logging():
     # 创建logs目录（如果不存在）
     log_dir = "logs-kms"
     if not os.path.exists(log_dir):
-        safe_makedirs(log_dir)  # 使用安全的目录创建函数
+        safe_makedirs(log_dir)  # 使用安全的目录创建函数`
 
     # 生成日志文件路径
     log_file = os.path.join(
